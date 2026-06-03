@@ -2,6 +2,7 @@ import { Env, List, ExecutionContext } from "../types";
 import { parseList } from "./parser";
 import { BloomFilter } from "./bloom";
 import { pipelineCache } from "../pipeline/cache";
+import { ProfileModel } from "../models/profile";
 
 /**
  * 同步并更新 Profile 关联的规则列表，生成布隆过滤器。
@@ -14,15 +15,16 @@ import { pipelineCache } from "../pipeline/cache";
  * @param ctx - 执行上下文，用于在后台执行缓存清理等异步操作
  */
 export async function syncProfileLists(profileId: string, env: Env, ctx: ExecutionContext): Promise<void> {
-  const { results: lists } = await env.DB.prepare("SELECT id, url FROM lists WHERE profile_id = ?").bind(profileId).all<List>();
+  const profileModel = new ProfileModel(env.DB);
+  const lists = await profileModel.getLists(profileId);
   
   const now = Math.floor(Date.now() / 1000);
 
   if (lists.length === 0) {
     // 如果当前 Profile 没有配置任何订阅列表，则清理旧的布隆过滤器数据
-    await env.DB.prepare("DELETE FROM profile_blooms WHERE profile_id = ?").bind(profileId).run();
+    await profileModel.clearProfileBlooms(profileId);
     // 更新配置的同步时间，防止被 Cron 定时任务重复选中
-    await env.DB.prepare("UPDATE profiles SET list_updated_at = ? WHERE id = ?").bind(now, profileId).run();
+    await profileModel.updateListUpdatedAt(profileId, now);
     return;
   }
   const allDomains = new Set<string>();
@@ -44,7 +46,7 @@ export async function syncProfileLists(profileId: string, env: Env, ctx: Executi
     }
 
     // 单个列表拉取完毕后更新其同步时间和可用状态
-    await env.DB.prepare("UPDATE lists SET last_synced_at = ?, enabled = ? WHERE id = ?").bind(now, success ? 1 : 0, list.id).run();
+    await profileModel.updateListSyncStatus(list.id, now, success ? 1 : 0);
   }
 
   const domainArray = Array.from(allDomains);
@@ -57,9 +59,7 @@ export async function syncProfileLists(profileId: string, env: Env, ctx: Executi
     const binary = bloom.toUint8Array();
 
     // 将序列化后的布隆过滤器二进制数据存储到 D1 数据库中
-    await env.DB.prepare(
-      "INSERT INTO profile_blooms (profile_id, bloom_filter, updated_at) VALUES (?, ?, ?) ON CONFLICT(profile_id) DO UPDATE SET bloom_filter = excluded.bloom_filter, updated_at = excluded.updated_at"
-    ).bind(profileId, binary.buffer, now).run();
+    await profileModel.upsertProfileBloom(profileId, binary.buffer as ArrayBuffer, now);
 
     // 通知缓存层异步清除此 Profile 的相关解析缓存，以使新规则立刻生效
     if (ctx && typeof ctx.waitUntil === 'function') {
@@ -70,5 +70,5 @@ export async function syncProfileLists(profileId: string, env: Env, ctx: Executi
   }
 
   // 更新整个 Profile 级别的最后同步时间，作为 Cron 定时同步任务的判断依据
-  await env.DB.prepare("UPDATE profiles SET list_updated_at = ? WHERE id = ?").bind(now, profileId).run();
+  await profileModel.updateListUpdatedAt(profileId, now);
 }

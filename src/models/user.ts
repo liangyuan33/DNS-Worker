@@ -13,7 +13,24 @@ export class UserModel {
   }
 
   async listAll(): Promise<User[]> {
-    const { results } = await this.db.prepare("SELECT id, username, role, created_at FROM users ORDER BY created_at DESC").all<User>();
+    // Note regarding activity timestamps:
+    // Due to schema history, `users.last_active_at` actually records the time of the last DNS resolution 
+    // triggered by any of the user's profiles, NOT their web interface activity.
+    // Therefore, we query the latest `timestamp` from `user_activity_log` to get the true "Last Active" time,
+    // and alias `users.last_active_at` as `last_resolve_at`.
+    const { results } = await this.db.prepare(`
+      SELECT 
+        u.id, 
+        u.username, 
+        u.role, 
+        u.created_at, 
+        MAX(al.timestamp) as last_active_at,
+        u.last_active_at as last_resolve_at
+      FROM users u
+      LEFT JOIN user_activity_log al ON al.user_id = u.id
+      GROUP BY u.id
+      ORDER BY u.created_at DESC
+    `).all<User>();
     return results;
   }
 

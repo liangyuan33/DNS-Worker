@@ -82,6 +82,7 @@ export const ActiveSessionsCard: React.FC = () => {
               <tr>
                 <th>{t("account.sessions.device", "Device")}</th>
                 <th>{t("account.sessions.ip", "IP Address")}</th>
+                <th>{t("account.sessions.loginTime", "Login Time")}</th>
                 <th>{t("account.sessions.expires", "Expires")}</th>
                 <th>{t("account.sessions.action", "Action")}</th>
               </tr>
@@ -103,6 +104,9 @@ export const ActiveSessionsCard: React.FC = () => {
                     {session.ip_address || "—"}
                   </td>
                   <td className="text-xs text-gray-500 align-middle">
+                    {session.created_at ? formatDateTime(new Date(session.created_at * 1000)) : "—"}
+                  </td>
+                  <td className="text-xs text-gray-500 align-middle">
                     {formatDateTime(new Date(session.expires_at * 1000))}
                   </td>
                   <td className="align-middle">
@@ -110,6 +114,7 @@ export const ActiveSessionsCard: React.FC = () => {
                       small
                       minimal
                       intent={Intent.DANGER}
+                      disabled={session.is_current}
                       icon={<LogOut size={14} />}
                       text={t("account.sessions.revoke", "Revoke")}
                       loading={revoking === session.id}

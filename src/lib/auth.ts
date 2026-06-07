@@ -5,6 +5,7 @@ import { SessionModel } from "../models/session";
 export interface Session {
   id: string;
   user_id: string;
+  created_at: number;
   expires_at: number;
   ip_address?: string | null;
   user_agent?: string | null;
@@ -32,18 +33,20 @@ export function generateId(length: number): string {
  */
 export async function createSession(db: D1Database, userId: string, ipAddress: string | null = null, userAgent: string | null = null): Promise<Session> {
   const sessionId = generateId(40);
-  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_EXPIRATION_DAYS * 24 * 60 * 60;
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = now + SESSION_EXPIRATION_DAYS * 24 * 60 * 60;
   
   const session: Session = {
     id: sessionId,
     user_id: userId,
+    created_at: now,
     expires_at: expiresAt,
     ip_address: ipAddress,
     user_agent: userAgent
   };
 
   const sessionModel = new SessionModel(db);
-  await sessionModel.createSession(session.id, session.user_id, session.expires_at, session.ip_address, session.user_agent);
+  await sessionModel.createSession(session.id, session.user_id, session.created_at, session.expires_at, session.ip_address, session.user_agent);
 
   return session;
 }
@@ -62,6 +65,7 @@ export async function validateSession(db: D1Database, sessionId: string): Promis
   const session: Session = {
     id: result.session_id,
     user_id: result.user_id,
+    created_at: result.created_at,
     expires_at: result.expires_at,
     ip_address: result.ip_address,
     user_agent: result.user_agent

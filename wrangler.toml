@@ -42,7 +42,7 @@ head_sampling_rate = 0.05
 [vars]
 # Used to resolve DoH domains
 SUBSTITUTE_DOMAIN="www.okx.com"
-IP_REGION_APAC = """
+IP_REGION_CN = """
 [
   {
     "ip": "198.41.222.102",
@@ -62,9 +62,6 @@ IP_REGION_APAC = """
   }
 ]
 """
-IP_REGION_NAE='[]'
-IP_REGION_NAW='[]'
-IP_REGION_EU='[]'
 # Time constants
 # Session duration for authenticated users (in days)
 SESSION_EXPIRATION_DAYS=30

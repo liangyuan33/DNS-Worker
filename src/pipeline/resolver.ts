@@ -152,14 +152,14 @@ export const pipelineResolver = {
     }
   },
 
-  async block(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'BLOCK' | 'REDIRECT', reason: string, customAnswer?: string): Promise<ResolutionResult> {
+  async block(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'BLOCK' | 'REDIRECT', reason: string, customAnswer?: string, responseType?: string): Promise<ResolutionResult> {
     const logModel = new LogModel(context.env.DB);
     const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
     let answer: Uint8Array;
     let displayAnswer = customAnswer || "";
 
     if (action === 'REDIRECT' && customAnswer) {
-      answer = buildResponse(query.raw, query.type, customAnswer);
+      answer = buildResponse(query.raw, responseType || query.type, customAnswer);
     } else {
       // 处理拦截模式 (BLOCK)
       const mode = settings.block_mode || 'NULL_IP';

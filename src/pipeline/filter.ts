@@ -29,14 +29,29 @@ export const pipelineFilter = {
     const redirectRule = DNSFilter.findMatch(query.name, redirections);
     if (redirectRule) {
       let val: string | undefined;
-      if (query.type === 'A') val = redirectRule.v_a;
-      else if (query.type === 'AAAA') val = redirectRule.v_aaaa;
-      else if (query.type === 'TXT') val = redirectRule.v_txt;
-      else if (query.type === 'CNAME') val = redirectRule.v_cname;
+      let respType = query.type;
+
+      if (query.type === 'A') {
+        val = redirectRule.v_a;
+        if (!val && redirectRule.v_cname) {
+          val = redirectRule.v_cname;
+          respType = 'CNAME';
+        }
+      } else if (query.type === 'AAAA') {
+        val = redirectRule.v_aaaa;
+        if (!val && redirectRule.v_cname) {
+          val = redirectRule.v_cname;
+          respType = 'CNAME';
+        }
+      } else if (query.type === 'TXT') {
+        val = redirectRule.v_txt;
+      } else if (query.type === 'CNAME') {
+        val = redirectRule.v_cname;
+      }
 
       if (val) {
         track('local_rules');
-        const result = await pipelineResolver.block(request, query, context, settings, "REDIRECT", `Rule: ${redirectRule.pattern}`, val);
+        const result = await pipelineResolver.block(request, query, context, settings, "REDIRECT", `Rule: ${redirectRule.pattern}`, val, respType);
         return result;
       }
     }
@@ -50,11 +65,17 @@ export const pipelineFilter = {
     }
     track('local_rules');
 
-    // 外部列表过滤 (精确匹配)
+    // 外部列表过滤 (精确匹配 + 子域名匹配)
     if (bloom) {
-      if (bloom.test(domainLower)) {
-        track('bloom_check');
-        return pipelineResolver.block(request, query, context, settings, "BLOCK", `External List: ${domainLower}`);
+      let currentDomain = domainLower;
+      while (currentDomain) {
+        if (bloom.test(currentDomain)) {
+          track('bloom_check');
+          return pipelineResolver.block(request, query, context, settings, "BLOCK", `External List: ${currentDomain}`);
+        }
+        const firstDot = currentDomain.indexOf('.');
+        if (firstDot === -1) break;
+        currentDomain = currentDomain.substring(firstDot + 1);
       }
       track('bloom_check');
     }

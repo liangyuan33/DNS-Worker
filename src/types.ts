@@ -8,6 +8,9 @@ export interface Env {
   BLOOM_MEM_TTL?: string | number;
   SYNC_TIMEOUT_MS?: string | number;
   INACTIVITY_THRESHOLD_DAYS?: string | number;
+  PRESET_UPSTREAMS?: string;
+  PRESET_EXTERNAL_FILTERS?: string;
+  BLOOM_FALSE_POSITIVE_RATE?: string | number;
   THROTTLE_ACTIVE_SEC?: string | number;
   SYNC_PROFILE_INTERVAL_SEC?: string | number;
   TURNSTILE_SECRET_KEY?: string;

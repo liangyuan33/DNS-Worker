@@ -3,8 +3,15 @@ import { useTranslation } from "react-i18next";
 
 export const usePresetUpstreams = () => {
   const { t } = useTranslation();
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const config = (window as any).OBEX_CONFIG?.upstreams;
+    if (config && Array.isArray(config)) {
+      return config.map((item: any) => ({
+        label: t(item.label),
+        url: item.url
+      }));
+    }
+    return [
       { label: t("settings.presetCloudflareSecurity"), url: "https://security.cloudflare-dns.com/dns-query" },
       { label: t("settings.presetCloudflareFamilies"), url: "https://family.cloudflare-dns.com/dns-query" },
       { label: t("settings.presetQuad9"), url: "https://dns.quad9.net/dns-query" },
@@ -17,9 +24,8 @@ export const usePresetUpstreams = () => {
       { label: "Cloudflare Security (1.1.1.2)", url: "1.1.1.2" },
       { label: "Quad9 (9.9.9.9)", url: "9.9.9.9:9953" },
       { label: "Google (8.8.8.8)", url: "8.8.8.8" },
-    ],
-    [t]
-  );
+    ];
+  }, [t]);
 };
 
 export const useLogRetentionOptions = () => {

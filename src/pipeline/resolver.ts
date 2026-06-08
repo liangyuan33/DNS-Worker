@@ -1,14 +1,22 @@
 import { Context, DNSQuery, ResolutionResult, ProfileSettings } from "../types";
 import { LogModel } from "../models/log";
 import { fetchGeoIP } from "../utils/geoip";
-import { buildResponse, parseDNSAnswer } from "../utils/dns";
+import { buildResponse, buildResponseMulti, buildDNSQuery, parseDNSAnswer, DNSRecord } from "../utils/dns";
 import { dnsCache } from "./cache";
 import { connect } from 'cloudflare:sockets';
+import { isSafeUrl } from "../utils/validator";
 
 export const pipelineResolver = {
   async resolve(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'PASS', reason?: string): Promise<ResolutionResult> {
     const logModel = new LogModel(context.env.DB);
     let upstreamUrl = settings.upstream[0] || "https://security.cloudflare-dns.com/dns-query";
+    if (!isSafeUrl(upstreamUrl)) {
+      return { 
+        answer: new Uint8Array(), ttl: 0, action: "FAIL", reason: "Unsafe upstream URL",
+        diagnostics: { upstream_url: upstreamUrl, method: "BLOCKED", status: 0 },
+        latency: Date.now() - context.startTime
+      };
+    }
     const startFetch = Date.now();
     let answer: Uint8Array;
     let upstreamLatency = 0;
@@ -18,7 +26,9 @@ export const pipelineResolver = {
     let ecs: string | undefined = "";
     if (settings.ecs?.enabled) {
       const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
-      ecs = settings.ecs.use_client_ip ? `${clientIp}/${clientIp.includes(':') ? 48 : 24}` : (settings.ecs.ipv4_cidr || settings.ecs.ipv6_cidr);
+      ecs = settings.ecs.use_client_ip 
+        ? `${clientIp}/${clientIp.includes(':') ? 48 : 24}` 
+        : (query.type === 'AAAA' ? (settings.ecs.ipv6_cidr || settings.ecs.ipv4_cidr) : (settings.ecs.ipv4_cidr || settings.ecs.ipv6_cidr));
     }
 
     try {
@@ -152,14 +162,40 @@ export const pipelineResolver = {
     }
   },
 
-  async block(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'BLOCK' | 'REDIRECT', reason: string, customAnswer?: string): Promise<ResolutionResult> {
+  async block(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'BLOCK' | 'REDIRECT', reason: string, customAnswer?: string, responseType?: string): Promise<ResolutionResult> {
     const logModel = new LogModel(context.env.DB);
     const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
     let answer: Uint8Array;
     let displayAnswer = customAnswer || "";
 
     if (action === 'REDIRECT' && customAnswer) {
-      answer = buildResponse(query.raw, query.type, customAnswer);
+      if (responseType === 'CNAME' && (query.type === 'A' || query.type === 'AAAA')) {
+        try {
+          // 如果用户查询 A/AAAA，但规则返回 CNAME，我们需要为其补全目标域名的 A/AAAA 记录
+          const targetQueryRaw = buildDNSQuery(customAnswer, query.type);
+          const targetQuery: DNSQuery = { name: customAnswer, type: query.type, raw: targetQueryRaw };
+          const upstreamRes = await pipelineResolver.resolve(request, targetQuery, context, settings, "PASS");
+          
+          if (upstreamRes.answer && upstreamRes.answer.length > 0) {
+            const parsedTargetAnswers = parseDNSAnswer(upstreamRes.answer);
+            const records: DNSRecord[] = [{ type: 'CNAME', value: customAnswer, ttl: 60 }];
+            
+            for (const a of parsedTargetAnswers) {
+              if (a.type === query.type || a.type === 'CNAME') {
+                records.push({ name: a.name, type: a.type, value: a.data, ttl: a.ttl });
+              }
+            }
+            answer = buildResponseMulti(query.raw, records, 0);
+          } else {
+            answer = buildResponse(query.raw, responseType, customAnswer);
+          }
+        } catch (e) {
+          console.error("CNAME resolution failed:", e);
+          answer = buildResponse(query.raw, responseType, customAnswer);
+        }
+      } else {
+        answer = buildResponse(query.raw, responseType || query.type, customAnswer);
+      }
     } else {
       // 处理拦截模式 (BLOCK)
       const mode = settings.block_mode || 'NULL_IP';

@@ -230,6 +230,12 @@ export async function handleAccountRequest(request: Request, env: Env, user: Use
       }
       if (request.method === 'POST') {
         const { username, password, role } = await request.json() as any;
+        if (!username || !/^[a-zA-Z0-9]{5,15}$/.test(username)) {
+          return new Response("Invalid username format", { status: 400 });
+        }
+        if (!password || password.length < 8 || !/(?=.*[a-zA-Z])(?=.*[0-9])/.test(password)) {
+          return new Response("Password format error", { status: 400 });
+        }
         const hashedPassword = await hashPassword(password);
         const userId = generateId(15);
         try {

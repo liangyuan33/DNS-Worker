@@ -1,5 +1,6 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { Profile, ProfileSettings, Rule, List } from "../types";
+import { generateId } from "../lib/auth";
 
 export interface ProfileWithBloom extends Profile {
   list_bloom?: string;
@@ -47,8 +48,8 @@ export class ProfileModel {
 
   async create(profile: { id: string, profile_key?: string, owner_id: string, name: string, settings: ProfileSettings }): Promise<boolean> {
     const now = Math.floor(Date.now() / 1000);
-    // Use provided profile_key or generate a 12-char random alphanumeric string
-    const profileKey = profile.profile_key || Math.random().toString(36).substring(2, 8) + Math.random().toString(36).substring(2, 8);
+    // Use provided profile_key or generate a 12-char secure string
+    const profileKey = profile.profile_key || generateId(12);
     const result = await this.db.prepare(
       "INSERT INTO profiles (id, profile_key, owner_id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )

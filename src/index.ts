@@ -16,6 +16,10 @@ import { generateLinuxSetupScript } from './utils/linuxSetup';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const nonceBytes = new Uint8Array(16);
+    crypto.getRandomValues(nonceBytes);
+    const nonce = Array.from(nonceBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
     const applySecurityHeaders = (response: Response) => {
       const newHeaders = new Headers(response.headers);
       newHeaders.set('X-Content-Type-Options', 'nosniff');
@@ -24,7 +28,7 @@ export default {
       newHeaders.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
       // Allow Turnstile API and basic SPA needs
       if (!newHeaders.has('Content-Security-Policy')) {
-        newHeaders.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://icons.duckduckgo.com; connect-src 'self' https://challenges.cloudflare.com https://cloudflare-dns.com https://1.1.1.1;");
+        newHeaders.set('Content-Security-Policy', `default-src 'self'; script-src 'self' 'nonce-${nonce}' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://icons.duckduckgo.com; connect-src 'self' https://challenges.cloudflare.com https://cloudflare-dns.com https://1.1.1.1;`);
       }
       return new Response(response.body, {
         status: response.status,
@@ -41,35 +45,6 @@ export default {
       // Auth API 路由 (无需鉴权)
       if (url.pathname.startsWith('/api/auth/')) {
         return handleAuthRequest(request, env);
-      }
-
-      // Debug API 路由 (查看客户端信息)
-      if (url.pathname === '/api/debug') {
-        const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
-        const connectedProfileId = await cacheUtils.get<string>(cache, `active_dns:${clientIp}`);
-        const cf = (request as any).cf;
-
-        // 提取地区配置变量
-        const regions: Record<string, any> = {};
-        for (const [key, value] of Object.entries(env)) {
-          if (key.startsWith('IP_REGION_') && typeof value === 'string') {
-            try {
-              const regionKey = key.replace('IP_REGION_', '');
-              regions[regionKey] = JSON.parse(value.trim().replace(/^'|'$/g, ""));
-            } catch (e) { }
-          }
-        }
-
-        return new Response(JSON.stringify({
-          ip: clientIp,
-          country: cf?.country || "UNKNOWN",
-          city: cf?.city || "UNKNOWN",
-          asn: cf?.asn || 0,
-          asOrganization: cf?.asOrganization || "UNKNOWN",
-          connectedProfileId: connectedProfileId || null,
-          substituteDomain: env.SUBSTITUTE_DOMAIN || "pages.dev",
-          regions
-        }), { headers: { 'Content-Type': 'application/json' } });
       }
 
       // 鉴权中间件逻辑 (仅对 /api 路由生效)
@@ -92,6 +67,33 @@ export default {
         }
 
         // 业务 API 路由
+        if (url.pathname === '/api/debug') {
+          const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+          const connectedProfileId = await cacheUtils.get<string>(cache, `active_dns:${clientIp}`);
+          const cf = (request as any).cf;
+
+          // 提取地区配置变量
+          const regions: Record<string, any> = {};
+          for (const [key, value] of Object.entries(env)) {
+            if (key.startsWith('IP_REGION_') && typeof value === 'string') {
+              try {
+                const regionKey = key.replace('IP_REGION_', '');
+                regions[regionKey] = JSON.parse(value.trim().replace(/^'|'$/g, ""));
+              } catch (e) { }
+            }
+          }
+
+          return new Response(JSON.stringify({
+            ip: clientIp,
+            country: cf?.country || "UNKNOWN",
+            city: cf?.city || "UNKNOWN",
+            asn: cf?.asn || 0,
+            asOrganization: cf?.asOrganization || "UNKNOWN",
+            connectedProfileId: connectedProfileId || null,
+            substituteDomain: env.SUBSTITUTE_DOMAIN || "pages.dev",
+            regions
+          }), { headers: { 'Content-Type': 'application/json' } });
+        }
         if (url.pathname.startsWith('/api/profiles')) {
           return handleProfilesRequest(request, env, currentUser, ctx);
         }
@@ -155,18 +157,17 @@ export default {
           });
         } catch (e: any) {
           console.error(`[DoH Pipeline] Internal Error:`, e);
-          return new Response(`Internal Server Error: ${e.message}`, { status: 500 });
+          return new Response(`Internal Server Error`, { status: 500 });
         }
       }
 
       // Linux /setup.sh 路由
       if (url.pathname === '/setup.sh') {
         const key = url.searchParams.get('key');
-        const originParam = url.searchParams.get('origin') || url.origin;
         if (!key || !/^[a-zA-Z0-9]{6,12}$/.test(key)) {
           return new Response('Missing or invalid key parameter', { status: 400 });
         }
-        const script = generateLinuxSetupScript(originParam, key);
+        const script = generateLinuxSetupScript(url.origin, key);
         return new Response(script, {
           headers: {
             'Content-Type': 'text/plain; charset=utf-8',
@@ -179,8 +180,27 @@ export default {
       try {
         let response = await (env as any).ASSETS.fetch(request);
         if (response.status === 404) {
-          return await (env as any).ASSETS.fetch(new Request(url.origin + '/', request));
+          response = await (env as any).ASSETS.fetch(new Request(url.origin + '/', request));
         }
+
+        const contentType = response.headers.get('Content-Type') || '';
+        if (contentType.includes('text/html')) {
+          let configStr = "{}";
+          try {
+             const upstreams = env.PRESET_UPSTREAMS ? JSON.parse(env.PRESET_UPSTREAMS) : null;
+             const filters = env.PRESET_EXTERNAL_FILTERS ? JSON.parse(env.PRESET_EXTERNAL_FILTERS) : null;
+             configStr = JSON.stringify({ upstreams, filters });
+          } catch (e) { }
+          
+          return new HTMLRewriter()
+            .on('head', {
+              element(element) {
+                element.prepend(`<script nonce="${nonce}">window.OBEX_CONFIG = ${configStr};</script>`, { html: true });
+              }
+            })
+            .transform(response);
+        }
+
         return response;
       } catch (e) {
         return new Response("Asset Fetch Error", { status: 500 });

@@ -13,12 +13,8 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "obex_db"
-database_id = "13d8c24f-064a-40d6-8b10-fa70bb3f79ab"
-
-# KV Namespace for Cache (Deprecated, primary use Cache API)
-# [[kv_namespaces]]
-# binding = "CACHE_KV"
-# id = ""
+# This field is required!
+database_id = ""
 
 [triggers]
 crons = ["0 * * * *"]
@@ -42,10 +38,26 @@ head_sampling_rate = 0.05
 [vars]
 # Used to resolve DoH domains
 SUBSTITUTE_DOMAIN="www.okx.com"
-IP_REGION_APAC='[{"ip":"198.41.222.102","area":"SG"},{"ip":"173.245.59.246","area":"SG"},{"ip":"104.18.47.174","area":"HK"},{"ip":"104.19.50.3","area":"HK"}]'
-IP_REGION_NAE='[]'
-IP_REGION_NAW='[]'
-IP_REGION_EU='[]'
+IP_REGION_CN = """
+[
+  {
+    "ip": "198.41.222.102",
+    "area": "SG"
+  },
+  {
+    "ip": "173.245.59.246",
+    "area": "SG"
+  },
+  {
+    "ip": "104.18.47.174",
+    "area": "HK"
+  },
+  {
+    "ip": "104.19.50.3",
+    "area": "HK"
+  }
+]
+"""
 # Time constants
 # Session duration for authenticated users (in days)
 SESSION_EXPIRATION_DAYS=30
@@ -61,3 +73,82 @@ INACTIVITY_THRESHOLD_DAYS=180
 THROTTLE_ACTIVE_SEC=3600
 # Minimum interval between automated blocklist profile syncs (in seconds)
 SYNC_PROFILE_INTERVAL_SEC=86400
+
+# Preset Upstream Services
+PRESET_UPSTREAMS = """
+[
+  {
+    "label": "settings.presetCloudflareSecurity",
+    "url": "https://security.cloudflare-dns.com/dns-query"
+  },
+  {
+    "label": "settings.presetCloudflareFamilies",
+    "url": "https://family.cloudflare-dns.com/dns-query"
+  },
+  {
+    "label": "settings.presetQuad9",
+    "url": "https://dns.quad9.net/dns-query"
+  },
+  {
+    "label": "settings.presetQuad9Ecs",
+    "url": "https://dns11.quad9.net/dns-query"
+  },
+  {
+    "label": "settings.presetControlDFree",
+    "url": "https://freedns.controld.com/no-ads-malware-typo"
+  },
+  {
+    "label": "settings.presetControlDUncensored",
+    "url": "https://freedns.controld.com/uncensored"
+  },
+  {
+    "label": "settings.presetAdGuard",
+    "url": "https://dns.adguard-dns.com/dns-query"
+  },
+  {
+    "label": "settings.presetAdGuardFamily",
+    "url": "https://family.adguard-dns.com/dns-query"
+  },
+  {
+    "label": "Cloudflare (1.1.1.1)",
+    "url": "1.1.1.1"
+  },
+  {
+    "label": "Cloudflare Security (1.1.1.2)",
+    "url": "1.1.1.2"
+  },
+  {
+    "label": "Quad9 (9.9.9.9)",
+    "url": "9.9.9.9:9953"
+  },
+  {
+    "label": "Google (8.8.8.8)",
+    "url": "8.8.8.8"
+  }
+]
+"""
+
+# Preset External Filters
+PRESET_EXTERNAL_FILTERS = """
+[
+  {
+    "label": "filtering.presetOisdBig",
+    "url": "https://big.oisd.nl"
+  },
+  {
+    "label": "filtering.presetOisdNsfw",
+    "url": "https://nsfw.oisd.nl"
+  },
+  {
+    "label": "filtering.presetAdGuard",
+    "url": "https://adguardteam.github.io/AdguardFilters/BaseFilter/sections/adservers.txt"
+  },
+  {
+    "label": "filtering.presetStevenBlack",
+    "url": "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+  }
+]
+"""
+
+# Bloom Filter false positive rate
+BLOOM_FALSE_POSITIVE_RATE=0.0001

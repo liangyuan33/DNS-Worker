@@ -66,7 +66,8 @@
     "turnstileRequired": "Please complete the human verification",
     "turnstileError": "Verification service failed to load, please reload the page and try again",
     "verifying": "Verifying security check...",
-    "passwordLeaked": "Your password was found in a public data breach. For your security, please use a strong random password."
+    "passwordLeaked": "Your password was found in a public data breach. For your security, please use a strong random password.",
+    "usernameExists": "This username is already taken. Please try another one."
   },
   "setup": {
     "title": "Setup Guide",

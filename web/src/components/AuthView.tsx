@@ -310,6 +310,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onSuccess }) => {
         const msg = await res.text();
         if (msg === "password_leaked" || (res.status === 403 && (msg.toLowerCase().includes("ray id") || msg.includes("blocked") || msg.includes("security service")))) {
           setError(t("auth.passwordLeaked"));
+        } else if (msg === "username_exists") {
+          setError(t("auth.usernameExists"));
         } else {
           setError(msg || t("auth.authFailed"));
         }

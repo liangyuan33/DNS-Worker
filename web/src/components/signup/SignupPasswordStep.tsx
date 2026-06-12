@@ -25,6 +25,12 @@ export interface SignupPasswordStepProps {
   loading: boolean;
   /** Callback to handle form submission. */
   onSubmit: (e: React.FormEvent) => void;
+  /** Flag showing if Turnstile verification is enabled. */
+  isTurnstileEnabled: boolean | undefined;
+  /** Ref pointing to the Turnstile container div. */
+  turnstileRef: React.RefObject<HTMLDivElement | null>;
+  /** The current state of Turnstile verification. */
+  turnstileStatus: "idle" | "verifying" | "success" | "error";
 }
 
 /**
@@ -40,23 +46,36 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
   passwordFocused,
   setPasswordFocused,
   loading,
-  onSubmit
+  onSubmit,
+  isTurnstileEnabled,
+  turnstileRef,
+  turnstileStatus
 }) => {
+  const [showPassword, setShowPassword] = React.useState(false);
   const { t } = useTranslation();
 
   /**
-   * Renders a clear button inside the password input group.
+   * Renders the right elements (clear and/or show/hide password buttons) inside the password input group.
    *
-   * @returns React element or undefined.
+   * @returns React element.
    */
-  const renderPasswordClearButton = (): React.JSX.Element | undefined => {
-    if (!password) return undefined;
+  const renderPasswordRightElement = (): React.JSX.Element => {
     return (
-      <Button
-        minimal={true}
-        icon="cross"
-        onClick={() => setPassword("")}
-      />
+      <div className="flex items-center">
+        {password && (
+          <Button
+            minimal={true}
+            icon="cross"
+            onClick={() => setPassword("")}
+          />
+        )}
+        <Button
+          minimal={true}
+          icon={showPassword ? "eye-open" : "eye-off"}
+          onClick={() => setShowPassword(!showPassword)}
+          title={showPassword ? t("auth.hidePassword", "Hide password") : t("auth.showPassword", "Show password")}
+        />
+      </div>
     );
   };
 
@@ -75,7 +94,7 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
               id="password"
               leftIcon="lock"
               placeholder={t("auth.passwordPlaceholder")}
-              type="password"
+              type={showPassword ? "text" : "password"}
               size="large"
               className="rounded-xl w-full"
               value={password}
@@ -84,7 +103,7 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
               }
               onFocus={() => setPasswordFocused(true)}
               onBlur={() => setPasswordFocused(false)}
-              rightElement={renderPasswordClearButton()}
+              rightElement={renderPasswordRightElement()}
               required
               autoFocus
             />
@@ -92,15 +111,26 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
         </Tooltip>
       </FormGroup>
 
+      {isTurnstileEnabled && (
+        <div className="py-2 flex justify-center min-h-16.25">
+          <div ref={turnstileRef} />
+        </div>
+      )}
+
       <Button
         fill
         size="large"
         intent={Intent.PRIMARY}
         type="submit"
-        loading={loading}
+        loading={loading || turnstileStatus === "verifying"}
+        disabled={
+          !!isTurnstileEnabled && turnstileStatus !== "success"
+        }
         className="mt-6 font-bold py-6 rounded-xl shadow-lg shadow-blue-500/20"
       >
-        {t("auth.signupBtn")}
+        {turnstileStatus === "verifying"
+          ? t("auth.verifying")
+          : t("auth.signupBtn")}
       </Button>
     </form>
   );

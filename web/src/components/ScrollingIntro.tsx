@@ -8,7 +8,8 @@ import {
   BarChart3,
   Edit3,
   Zap,
-  Cpu
+  Cpu,
+  MonitorSmartphone
 } from "lucide-react";
 
 const INTRO_ITEMS = [
@@ -19,6 +20,7 @@ const INTRO_ITEMS = [
   { icon: BarChart3, colorClass: "text-red-500", titleKey: "intro.item5Title", descKey: "intro.item5Desc" },
   { icon: Zap, colorClass: "text-yellow-500", titleKey: "intro.item6Title", descKey: "intro.item6Desc" },
   { icon: Cpu, colorClass: "text-cyan-500", titleKey: "intro.item7Title", descKey: "intro.item7Desc" },
+  { icon: MonitorSmartphone, colorClass: "text-indigo-500", titleKey: "intro.item9Title", descKey: "intro.item9Desc" },
   { icon: Edit3, colorClass: "text-pink-500", titleKey: "intro.item8Title", descKey: "intro.item8Desc" },
 ];
 
@@ -40,16 +42,31 @@ export const ScrollingIntro: React.FC = () => {
     let requestId: number;
     const scrollSpeed = 0.6;
     const scroll = () => {
-      if (!isPaused) {
-        container.scrollTop += scrollSpeed;
-        if (container.scrollTop >= container.scrollHeight / 2) container.scrollTop = 0;
+      const bubbles = Array.from(container.children) as HTMLElement[];
+      if (bubbles.length >= INTRO_ITEMS.length * 3) {
+        const y0 = bubbles[0].offsetTop;
+        const yN = bubbles[INTRO_ITEMS.length].offsetTop;
+        const loopHeight = yN - y0;
+
+        if (loopHeight > 0) {
+          if (!isPaused) {
+            container.scrollTop += scrollSpeed;
+          }
+
+          if (container.scrollTop >= loopHeight * 2) {
+            container.scrollTop -= loopHeight;
+          } else if (container.scrollTop < loopHeight) {
+            container.scrollTop += loopHeight;
+          }
+        }
       }
+
       const rect = container.getBoundingClientRect();
       const hotZone = rect.top + rect.height / 3;
-      const bubbles = Array.from(container.children);
+      const bubblesForFocus = Array.from(container.children);
       let foundIdx = -1;
-      for (let i = 0; i < bubbles.length; i++) {
-        const bubbleRect = bubbles[i].getBoundingClientRect();
+      for (let i = 0; i < bubblesForFocus.length; i++) {
+        const bubbleRect = bubblesForFocus[i].getBoundingClientRect();
         if (bubbleRect.top <= hotZone && bubbleRect.bottom >= hotZone) {
           foundIdx = i % INTRO_ITEMS.length;
           break;
@@ -62,7 +79,7 @@ export const ScrollingIntro: React.FC = () => {
     return () => cancelAnimationFrame(requestId);
   }, [isPaused]);
 
-  const displayItems = [...INTRO_ITEMS, ...INTRO_ITEMS, ...INTRO_ITEMS, ...INTRO_ITEMS, ...INTRO_ITEMS, ...INTRO_ITEMS];
+  const displayItems = [...INTRO_ITEMS, ...INTRO_ITEMS, ...INTRO_ITEMS];
 
   return (
     <div

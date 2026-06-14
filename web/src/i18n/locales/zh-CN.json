@@ -444,7 +444,16 @@
       "totpVerifyFail": "两步验证失败",
       "totpSetup": "开启两步验证",
       "totpRemoved": "关闭两步验证",
-      "recoveryKeyUsed": "使用了恢复密钥"
+      "recoveryKeyUsed": "使用了恢复密钥",
+      "sessionRevoked": "会话已撤销",
+      "reasons": {
+        "user_active": "主动登出",
+        "user_revoke": "撤销会话",
+        "expired": "会话已过期",
+        "geolocation_mismatch": "异地访问限制",
+        "geolocation_missing": "缺少地理位置信息",
+        "token_reuse": "凭证重复使用（安全警告）"
+      }
     }
   },
   "intro": {

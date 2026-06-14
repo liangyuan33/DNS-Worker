@@ -445,7 +445,16 @@
       "totpVerifyFail": "2FA Verification Failed",
       "totpSetup": "2FA Enabled",
       "totpRemoved": "2FA Disabled",
-      "recoveryKeyUsed": "Recovery Key Used"
+      "recoveryKeyUsed": "Recovery Key Used",
+      "sessionRevoked": "Session Revoked",
+      "reasons": {
+        "user_active": "Active logout",
+        "user_revoke": "Session revoked",
+        "expired": "Session expired",
+        "geolocation_mismatch": "Geographic location mismatch",
+        "geolocation_missing": "Geolocation missing",
+        "token_reuse": "Token reused (security warning)"
+      }
     }
   },
   "intro": {

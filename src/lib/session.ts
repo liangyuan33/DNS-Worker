@@ -135,13 +135,13 @@ export async function rotateSession(
   if (session.rotation_counter !== parsed.v) {
     // Token reuse detected. Terminate the session immediately.
     await invalidateSession(env, session.id);
-    return { session: null, user: null, newRefreshToken: null, reason: "token_reuse" };
+    return { session: null, user, newRefreshToken: null, reason: "token_reuse" };
   }
 
   // Expiration check
   if (Math.floor(Date.now() / 1000) >= session.expires_at) {
     await invalidateSession(env, session.id);
-    return { session: null, user: null, newRefreshToken: null, reason: "expired" };
+    return { session: null, user, newRefreshToken: null, reason: "expired" };
   }
 
   // Strict Geolocation Check
@@ -151,14 +151,14 @@ export async function rotateSession(
     currentLat === null || currentLon === null
   ) {
     await invalidateSession(env, session.id);
-    return { session: null, user: null, newRefreshToken: null, reason: "geolocation_missing" };
+    return { session: null, user, newRefreshToken: null, reason: "geolocation_missing" };
   }
 
   const distance = calculateDistanceInKm(session.latitude, session.longitude, currentLat, currentLon);
   const maxDistance = Number(env.SESSION_GEO_DISTANCE_KM) || 50;
   if (distance > maxDistance) {
     await invalidateSession(env, session.id);
-    return { session: null, user: null, newRefreshToken: null, reason: "geolocation_mismatch" };
+    return { session: null, user, newRefreshToken: null, reason: "geolocation_mismatch" };
   }
 
   // Session extension (if close to expiration)

@@ -277,6 +277,9 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
     const { session, user, newRefreshToken, reason } = await rotateSession(env, refreshToken, latitude, longitude);
 
     if (!session || !user || !newRefreshToken) {
+      if (user) {
+        await activityLog.record(user.id, 'logout', clientIp, userAgent, { reason: reason || 'unknown' });
+      }
       await cacheUtils.isRateLimited(cache, `refresh_fail:${clientIp}`, 100, 60);
       return new Response(JSON.stringify({ error: "Invalid refresh token", reason: reason || "unknown" }), { 
         status: 401,
@@ -313,7 +316,7 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
         const userId = await sessionModel.getSessionUserId(parsed.sid);
         await invalidateSession(env, parsed.sid);
         if (userId) {
-          await activityLog.record(userId, 'logout', clientIp, userAgent);
+          await activityLog.record(userId, 'logout', clientIp, userAgent, { reason: 'user_active' });
         }
       }
     }

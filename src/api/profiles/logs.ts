@@ -67,7 +67,22 @@ export async function handleProfileLogsAndAnalyticsRequest(
       since = Math.max(since, retentionThreshold);
     }
 
-    const results = await logModel.getLogs(profileId, { since, until, status: status || undefined, search: search || undefined, before: before ? parseInt(before) : undefined, limit: parseInt(urlParams.get('limit') || '50'), access_point_id: accessPointId || undefined });
+    let limit = parseInt(urlParams.get('limit') || '50', 10);
+    if (isNaN(limit) || limit <= 0) {
+      limit = 50;
+    } else if (limit > 100) {
+      limit = 100;
+    }
+
+    const results = await logModel.getLogs(profileId, {
+      since,
+      until,
+      status: status || undefined,
+      search: search || undefined,
+      before: before ? parseInt(before) : undefined,
+      limit,
+      access_point_id: accessPointId || undefined
+    });
     return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
   }
 

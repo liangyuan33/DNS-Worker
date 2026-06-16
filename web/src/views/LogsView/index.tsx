@@ -10,6 +10,7 @@ import { LogsTable } from "./components/LogsTable";
 import { LogsList } from "./components/LogsList";
 import { LogDetailsDrawer } from "./components/LogDetailsDrawer";
 const PAGE_SIZE = 50;
+const PAGE_SIZE_IN_REALTIME = 25;
 
 export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) => {
   const isMobile = useIsMobile();
@@ -81,7 +82,8 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
     else setLoadingMore(true);
 
     try {
-      let url = `/api/profiles/${profileId}/logs?range=${currentRange}&limit=${PAGE_SIZE}`;
+      const limit = realtimeRefresh ? PAGE_SIZE_IN_REALTIME : PAGE_SIZE;
+      let url = `/api/profiles/${profileId}/logs?range=${currentRange}&limit=${limit}`;
       if (currentRange === "custom" && customRange.start && customRange.end) {
         const startTs = Math.floor(new Date(customRange.start).getTime() / 1000);
         const endTs = Math.floor(new Date(customRange.end).getTime() / 1000);
@@ -113,7 +115,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
 
       if (isInitial) {
         setLogs(logsData);
-        setHasMore(logsData.length >= PAGE_SIZE);
+        setHasMore(realtimeRefresh ? false : logsData.length >= limit);
         if (statsData) {
           const summary = { total: 0, pass: 0, block: 0, redirect: 0 };
           statsData.forEach((item: { action: string; count: number }) => {
@@ -127,7 +129,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
         }
       } else {
         setLogs((prev) => [...prev, ...logsData]);
-        setHasMore(logsData.length >= PAGE_SIZE);
+        setHasMore(realtimeRefresh ? false : logsData.length >= limit);
       }
 
       if (logsData && logsData.length > 0) {
@@ -154,13 +156,14 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
   };
 
   const loadMore = useCallback(() => {
+    if (realtimeRefresh) return;
     if (!loading && !loadingMore && hasMore) fetchLogs(range, false);
-  }, [loading, loadingMore, hasMore, range, profileId, statusFilter, accessPointIdFilter, searchQuery, logs, customRange]);
+  }, [loading, loadingMore, hasMore, range, profileId, statusFilter, accessPointIdFilter, searchQuery, logs, customRange, realtimeRefresh]);
 
   const lastLogElementRef = useCallback(
     (node: HTMLDivElement | null) => {
-      if (loading || loadingMore) return;
       if (observer.current) observer.current.disconnect();
+      if (loading || loadingMore || realtimeRefresh) return;
       observer.current = new IntersectionObserver(
         (entries) => {
           if (entries[0].isIntersecting && hasMore) loadMore();
@@ -169,14 +172,14 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
       );
       if (node) observer.current.observe(node);
     },
-    [loading, loadingMore, hasMore, loadMore]
+    [loading, loadingMore, hasMore, loadMore, realtimeRefresh]
   );
 
   useEffect(() => {
     if (range === "custom" && (!customRange.start || !customRange.end)) return;
     const timer = setTimeout(() => fetchLogs(range, true), searchQuery ? 500 : 0);
     return () => clearTimeout(timer);
-  }, [profileId, range, statusFilter, accessPointIdFilter, searchQuery, customRange]);
+  }, [profileId, range, statusFilter, accessPointIdFilter, searchQuery, customRange, realtimeRefresh]);
 
   useEffect(() => {
     const autoRefreshTimer = setInterval(() => {
@@ -243,7 +246,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction }) 
           {loadingMore ? (
             <Spinner size={16} />
           ) : (
-            !hasMore &&
+            !realtimeRefresh && !hasMore &&
             logs.length > 0 && <span className="text-[10px] opacity-30 italic">{t("logs.loadedAll", { count: logs.length })}</span>
           )}
         </div>

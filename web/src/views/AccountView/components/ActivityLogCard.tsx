@@ -112,12 +112,30 @@ export const ActivityLogCard: React.FC = () => {
                 <tbody>
                   {entries.map((entry) => {
                     const meta = getActionMeta(entry.action);
+                    let reasonText = "";
+                    if (entry.extra) {
+                      try {
+                        const parsed = JSON.parse(entry.extra);
+                        if (parsed.reason) {
+                          reasonText = t(`account.activity.reasons.${parsed.reason}`, parsed.reason) as string;
+                        }
+                      } catch {
+                        /* ignore */
+                      }
+                    }
                     return (
                       <tr key={entry.id}>
                         <td className="align-middle">
-                          <Tag minimal intent={meta.intent} icon={meta.icon as any}>
-                            {t(meta.label, entry.action)}
-                          </Tag>
+                          <div className="flex flex-col items-start gap-1">
+                            <Tag minimal intent={meta.intent} icon={meta.icon as any}>
+                              {t(meta.label, entry.action)}
+                            </Tag>
+                            {reasonText && (
+                              <span className="text-xs text-gray-500 italic ml-1">
+                                {reasonText}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="text-xs text-gray-500 whitespace-nowrap align-middle">
                           {formatDateTime(new Date(entry.timestamp * 1000))}

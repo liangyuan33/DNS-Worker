@@ -9,6 +9,7 @@ import { generateId } from "../lib/auth";
 import { isSafeUrl } from "../utils/validator";
 
 const AP_NAME_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
+const PROFILE_NAME_REGEX = /^[\p{L}\p{N}_ -]{1,30}$/u;
 
 export async function handleProfilesRequest(request: Request, env: Env, user: User | null, ctx: ExecutionContext): Promise<Response> {
   const url = new URL(request.url);
@@ -27,7 +28,15 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
 
     if (request.method === 'POST') {
       const body = await request.json() as { name: string };
-      const existing = await profileModel.findByName(user.id, body.name);
+      
+      if (!body.name || !PROFILE_NAME_REGEX.test(body.name)) {
+        return new Response("Invalid Profile Name format", { status: 400 });
+      }
+
+      const existingProfiles = await profileModel.listByOwner(user.id);
+      if (existingProfiles.length >= 10) return new Response("Profile limit exceeded (max 10)", { status: 400 });
+
+      const existing = existingProfiles.find(p => p.name === body.name);
       if (existing) return new Response("The profile name already exists", { status: 400 });
 
       const newId = generateId(6);
@@ -66,7 +75,7 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
     // PATCH /api/profiles/:id (用于修改名称等基础信息)
     if (pathParts.length === 3 && request.method === 'PATCH') {
       const { name } = await request.json() as { name: string };
-      if (!name) return new Response("The name cannot be empty", { status: 400 });
+      if (!name || !PROFILE_NAME_REGEX.test(name)) return new Response("Invalid Profile Name format", { status: 400 });
       await profileModel.updateName(profileId, name);
       ctx.waitUntil(pipeline.clearCache(profileId));
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
@@ -227,8 +236,18 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
           return new Response(JSON.stringify(clients), { headers: { 'Content-Type': 'application/json' } });
         }
         if (subResource === 'destinations') {
-          const destinations = await logModel.getDestinations(profileId, since, until, accessPointId);
+          const limitParam = urlParams.get('limit');
+          const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+          const destinations = await logModel.getDestinations(profileId, since, until, accessPointId, limit !== undefined && !isNaN(limit) ? limit : undefined);
           return new Response(JSON.stringify(destinations), { headers: { 'Content-Type': 'application/json' } });
+        }
+        if (subResource === 'isps') {
+          const countryCode = urlParams.get('country_code');
+          if (!countryCode) return new Response("country_code is required", { status: 400 });
+          const limitParam = urlParams.get('limit');
+          const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+          const isps = await logModel.getISPByCountry(profileId, countryCode, since, until, accessPointId, limit !== undefined && !isNaN(limit) ? limit : undefined);
+          return new Response(JSON.stringify(isps), { headers: { 'Content-Type': 'application/json' } });
         }
         return new Response("Not Found", { status: 404 });
       }
@@ -277,6 +296,13 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
         const body = await request.json() as { name: string };
         if (!body.name) return new Response("Name is required", { status: 400 });
         if (!AP_NAME_REGEX.test(body.name)) return new Response("Invalid Access Point name format", { status: 400 });
+        
+        const currentAps = await profileModel.getAccessPoints(profileId);
+        if (currentAps.some(ap => ap.name.toLowerCase() === body.name.toLowerCase())) {
+          return new Response("Access Point name already exists", { status: 400 });
+        }
+        if (currentAps.length >= 100) return new Response("Access point limit exceeded (max 100)", { status: 400 });
+        
         const result = await profileModel.addAccessPoint(profileId, body.name);
         return new Response(JSON.stringify(result), { status: 201, headers: { 'Content-Type': 'application/json' } });
       }
@@ -285,6 +311,12 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
         const body = await request.json() as { name: string };
         if (!body.name) return new Response("Name is required", { status: 400 });
         if (!AP_NAME_REGEX.test(body.name)) return new Response("Invalid Access Point name format", { status: 400 });
+
+        const currentAps = await profileModel.getAccessPoints(profileId);
+        if (currentAps.some(ap => ap.id !== apId && ap.name.toLowerCase() === body.name.toLowerCase())) {
+          return new Response("Access Point name already exists", { status: 400 });
+        }
+
         await profileModel.updateAccessPointName(apId, profileId, body.name);
         return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
       }

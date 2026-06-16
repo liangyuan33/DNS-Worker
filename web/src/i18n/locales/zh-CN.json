@@ -5,6 +5,10 @@
     "selectProfile": "选择配置",
     "add": "添加",
     "newProfileName": "新配置名称...",
+    "profileNameFormatTip": "配置名称提示：1-30个字符，且不能与已有配置重名",
+    "profileLimitExceeded": "配置数量已达上限（最多10个）",
+    "profileNameExists": "该配置名称已存在",
+    "profileNameFormatError": "配置名称格式不正确",
     "create": "创建",
     "welcome": "欢迎",
     "createProfileToStart": "创建一个配置以开始。",
@@ -59,7 +63,7 @@
     "totpVerification": "TOTP 验证",
     "noAccount": "没有账户？立即注册",
     "haveAccount": "已有账户？返回登录",
-    "formatTipUsername": "用户名格式提示：仅限英文字母或数字，5 到 15 位",
+    "formatTipUsername": "用户名格式提示：仅限 5 到 32 位 Unix 用户名格式（小写字母或下划线开头，包含小写字母、数字、下划线及中划线）",
     "formatTipPassword": "密码格式提示：12-100位字符，必须包含字母、数字和特殊字符",
     "authFailed": "认证失败，请检查用户名或密码",
     "networkError": "网络错误，请稍后再试",
@@ -70,7 +74,12 @@
     "usernameExists": "该用户名已被注册，请尝试其他用户名。",
     "skip": "跳过",
     "showPassword": "显示密码",
-    "hidePassword": "隐藏密码"
+    "hidePassword": "隐藏密码",
+    "unauthorizedDefault": "您的登录会话已失效，请重新登录。",
+    "unauthorizedGeo": "检测到地理位置变更（超出距离限制），当前会话已被强制注销。",
+    "unauthorizedExpired": "您的登录已过期，请重新登录。",
+    "unauthorizedReuse": "安全警报：检测到重复登录，会话已终止。",
+    "unauthorizedRevoked": "您的会话已被注销或删除，请重新登录。"
   },
   "setup": {
     "title": "安装指南",
@@ -101,6 +110,8 @@
     "deleteAccessPoint": "删除",
     "deleteAccessPointConfirm": "确定要删除此接入点吗？",
     "manageAccessPoints": "管理接入点",
+    "searchAccessPoints": "搜索接入点...",
+    "accessPointNameExists": "接入点名称已存在",
     "accessPointCreated": "接入点创建成功",
     "accessPointRenamed": "接入点重命名成功",
     "accessPointDeleted": "接入点删除成功",
@@ -190,7 +201,8 @@
     "blocked": "已拦截",
     "redirected": "已重定向",
     "blockRate": "拦截率",
-    "activeDevices": "活跃 IP 地址",
+    "activeDevices": "活跃设备",
+    "activeIPs": "活跃 IP 地址",
     "queryTrend": "查询趋势",
     "noRecords": "此时间段内暂无记录",
     "topAllowed": "常用域名 (Allowed)",
@@ -201,7 +213,11 @@
     "location": "归属地",
     "queries": "查询数",
     "destinationDistribution": "流量目的地分布",
-    "requests": "请求"
+    "requests": "请求",
+    "topIsps": "主要运营商",
+    "pressToShowMore": "按下显示更多",
+    "maximize": "放大",
+    "minimize": "缩小"
   },
   "logs": {
     "title": "查询日志",
@@ -383,7 +399,7 @@
     "userRole": "用户角色",
     "cancel": "取消",
     "createNow": "立即创建",
-    "formatTipUsername": "用户名格式提示：仅限 5 至 15 位英文字母或数字",
+    "formatTipUsername": "用户名格式提示：仅限 5 至 32 位 Unix 用户名格式",
     "formatTipPassword": "密码格式提示：12-100位字符，必须包含字母、数字和特殊字符",
     "passwordSuccess": "密码修改成功",
     "updateFailed": "修改失败",
@@ -437,7 +453,16 @@
       "totpVerifyFail": "两步验证失败",
       "totpSetup": "开启两步验证",
       "totpRemoved": "关闭两步验证",
-      "recoveryKeyUsed": "使用了恢复密钥"
+      "recoveryKeyUsed": "使用了恢复密钥",
+      "sessionRevoked": "会话已撤销",
+      "reasons": {
+        "user_active": "主动登出",
+        "user_revoke": "撤销会话",
+        "expired": "会话已过期",
+        "geolocation_mismatch": "异地访问限制",
+        "geolocation_missing": "缺少地理位置信息",
+        "token_reuse": "凭证重复使用（安全警告）"
+      }
     }
   },
   "intro": {

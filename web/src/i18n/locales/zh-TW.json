@@ -5,6 +5,10 @@
     "selectProfile": "選擇配置",
     "add": "添加",
     "newProfileName": "新配置名稱...",
+    "profileNameFormatTip": "配置名稱提示：1-30個字元，且不能與已有配置重名",
+    "profileLimitExceeded": "配置數量已達上限（最多10個）",
+    "profileNameExists": "該配置名稱已存在",
+    "profileNameFormatError": "配置名稱格式不正確",
     "create": "創建",
     "welcome": "歡迎",
     "createProfileToStart": "創建一個配置以開始。",
@@ -59,7 +63,7 @@
     "totpVerification": "TOTP 驗證",
     "noAccount": "沒有帳戶？立即註冊",
     "haveAccount": "已有帳戶？返回登入",
-    "formatTipUsername": "用戶名格式提示：僅限英文字母或數字，5 到 15 位",
+    "formatTipUsername": "用戶名格式提示：僅限 5 到 32 位 Unix 用戶名格式（小寫字母或底線開頭，包含小寫字母、數字、底線及中線）",
     "formatTipPassword": "密碼格式提示：12-100位字元，必須包含字母、數字和特殊字元",
     "authFailed": "認證失敗，請檢查用戶名或密碼",
     "networkError": "網路錯誤，請稍後再試",
@@ -70,7 +74,12 @@
     "usernameExists": "該用戶名已被註冊，請嘗試其他用戶名。",
     "skip": "跳過",
     "showPassword": "顯示密碼",
-    "hidePassword": "隱藏密碼"
+    "hidePassword": "隱藏密碼",
+    "unauthorizedDefault": "您的登入會話已失效，請重新登入。",
+    "unauthorizedGeo": "檢測到地理位置變更（超出距離限制），當前會話已被強制註銷。",
+    "unauthorizedExpired": "您的登入已過期，請重新登入。",
+    "unauthorizedReuse": "安全警報：檢測到重複登入，會話已終止。",
+    "unauthorizedRevoked": "您的會話已被註銷或刪除，請重新登入。"
   },
   "setup": {
     "title": "安裝指南",
@@ -102,6 +111,8 @@
     "deleteAccessPoint": "刪除",
     "deleteAccessPointConfirm": "確定要刪除此存取點嗎？",
     "manageAccessPoints": "管理存取點",
+    "searchAccessPoints": "搜尋存取點...",
+    "accessPointNameExists": "存取點名稱已存在",
     "accessPointCreated": "存取點創建成功",
     "accessPointRenamed": "存取點重命名成功",
     "accessPointDeleted": "存取點刪除成功",
@@ -190,7 +201,8 @@
     "blocked": "已攔截",
     "redirected": "已重定向",
     "blockRate": "攔截率",
-    "activeDevices": "活躍 IP 地址",
+    "activeDevices": "活躍設備",
+    "activeIPs": "活躍 IP 地址",
     "queryTrend": "查詢趨勢",
     "noRecords": "此時間段內暫無記錄",
     "topAllowed": "常用域名 (Allowed)",
@@ -201,7 +213,11 @@
     "location": "歸屬地",
     "queries": "查詢數",
     "destinationDistribution": "流量目的地分佈",
-    "requests": "請求"
+    "requests": "請求",
+    "topIsps": "主要營運商",
+    "pressToShowMore": "按下顯示更多",
+    "maximize": "放大",
+    "minimize": "縮小"
   },
   "logs": {
     "title": "查詢日誌",
@@ -383,7 +399,7 @@
     "userRole": "用戶角色",
     "cancel": "取消",
     "createNow": "立即創建",
-    "formatTipUsername": "用戶名格式提示：僅限 5 至 15 位英文字母或數字",
+    "formatTipUsername": "用戶名格式提示：僅限 5 至 32 位 Unix 用戶名格式",
     "formatTipPassword": "密碼格式提示：12-100位字元，必須包含字母、數字和特殊字元",
     "passwordSuccess": "密碼修改成功",
     "updateFailed": "修改失敗",
@@ -437,7 +453,16 @@
       "totpVerifyFail": "兩步驗證失敗",
       "totpSetup": "開啟兩步驗證",
       "totpRemoved": "關閉兩步驗證",
-      "recoveryKeyUsed": "使用了恢復密鑰"
+      "recoveryKeyUsed": "使用了恢復密鑰",
+      "sessionRevoked": "會話已撤銷",
+      "reasons": {
+        "user_active": "主動登出",
+        "user_revoke": "撤銷會話",
+        "expired": "會話已過期",
+        "geolocation_mismatch": "異地存取限制",
+        "geolocation_missing": "缺少地理位置資訊",
+        "token_reuse": "憑證重複使用（安全警告）"
+      }
     }
   },
   "intro": {

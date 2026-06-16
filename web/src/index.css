@@ -8,6 +8,20 @@
   :root {
     --bg-color: #f9fafb;
     --text-color: #111827;
+    --map-bg: #e5e7eb;
+    --map-hover: #3b82f6;
+    --map-color-0: #e5e7eb;
+    --map-color-1: #eff6ff;
+    --map-color-2: #dbeafe;
+    --map-color-3: #bfdbfe;
+    --map-color-4: #93c5fd;
+    --map-color-5: #60a5fa;
+    --map-color-6: #3b82f6;
+    --map-color-7: #2563eb;
+    --map-color-8: #1d4ed8;
+    --map-color-9: #1e40af;
+    --map-color-10: #1e3a8a;
+    --map-stroke: #ffffff;
   }
 
   /* 当 HTML 带有 .dark 或 .bp6-dark 时切换变量 */
@@ -15,6 +29,20 @@
     --bg-color: #0f172a;
     --text-color: #f3f4f6;
     color-scheme: dark;
+    --map-bg: #1e293b;
+    --map-hover: #38bdf8;
+    --map-color-0: #1e293b;
+    --map-color-1: #172554;
+    --map-color-2: #1e3a8a;
+    --map-color-3: #1e40af;
+    --map-color-4: #1d4ed8;
+    --map-color-5: #2563eb;
+    --map-color-6: #3b82f6;
+    --map-color-7: #60a5fa;
+    --map-color-8: #93c5fd;
+    --map-color-9: #bfdbfe;
+    --map-color-10: #eff6ff;
+    --map-stroke: #0f172a;
   }
 
   html, body, #root {

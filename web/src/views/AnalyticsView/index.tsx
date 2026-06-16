@@ -15,7 +15,7 @@ import {
   InputGroup,
   HTMLSelect,
 } from "@blueprintjs/core";
-import { Shield, ShieldAlert, Zap, Globe, MapPin, Calendar, RotateCcw } from "lucide-react";
+import { Shield, ShieldAlert, Zap, Globe, MapPin, Calendar, RotateCcw, Maximize2, Minimize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import type {  AnalyticsData, TimeRange  } from "./types";
@@ -24,6 +24,7 @@ import { MetricCard } from "./components/MetricCard";
 import { RankTable } from "./components/RankTable";
 import { TrendChart } from "./components/TrendChart";
 import type { AccessPoint } from "../../types/auth";
+import { DestinationMap } from "./components/DestinationMap";
 
 export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) => {
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -33,6 +34,7 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
   const [customRange, setCustomRange] = useState({ start: "", end: "" });
   const [accessPointIdFilter, setAccessPointIdFilter] = useState<string | null>(null);
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
 
   useEffect(() => {
     fetch(`/api/profiles/${profileId}/access_points`)
@@ -106,7 +108,7 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
     { title: t("analytics.blocked"), value: blocked.toLocaleString(), icon: <ShieldAlert className="text-red-500" size={20} /> },
     { title: t("analytics.redirected"), value: redirected.toLocaleString(), icon: <RotateCcw className="text-amber-500" size={20} /> },
     { title: t("analytics.blockRate"), value: `${blockRate}%`, icon: <Shield className="text-green-500" size={20} /> },
-    { title: t("analytics."), value: data?.clients.length.toString() || "0", icon: <Globe className="text-purple-500" size={20} /> },
+    { title: t("analytics.activeIPs"), value: data?.clients.length.toString() || "0", icon: <Globe className="text-purple-500" size={20} /> },
   ];
 
   return (
@@ -159,7 +161,7 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
               value={accessPointIdFilter || ""}
               onChange={(e) => setAccessPointIdFilter(e.target.value || null)}
               options={[
-                { label: `All ${t("logs.filterAccessPoint")}s`, value: "" },
+                { label: `${t("logs.allAccessPoint")}`, value: "" },
                 ...accessPoints.map(ap => ({ label: ap.name, value: ap.id }))
               ]}
               minimal
@@ -170,7 +172,7 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
       </div>
 
       {/* Metrics */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 xl:gap-4">
         {metricCardsConfig.map((config, index) => (
           <MetricCard key={index} title={config.title} value={config.value} icon={config.icon} />
         ))}
@@ -194,7 +196,7 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
       </div>
 
       {/* Geolocation & Destinations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={`grid gap-6 ${isMapExpanded ? "grid-cols-1" : "grid-cols-1 lg:grid-cols-2"}`}>
         <Section title={t("analytics.clientActivity")} icon={<Globe size={16} />}>
           <HTMLTable striped className="w-full mt-2">
             <thead>
@@ -218,26 +220,25 @@ export const AnalyticsView: React.FC<{ profileId: string }> = ({ profileId }) =>
           </HTMLTable>
         </Section>
 
-        <Section title={t("analytics.destinationDistribution")} icon={<MapPin size={16} />}>
-          <div className="flex flex-wrap gap-4 mt-4 p-2">
-            {data?.destinations.map((d, i) => {
-              const geo = JSON.parse(d.dest_geoip);
-              return (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg border border-transparent hover:border-blue-500 transition-all cursor-default"
-                >
-                  <span className="text-lg">{getFlagEmoji(geo.country_code)}</span>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold leading-none">{geo.country}</span>
-                    <span className="text-[10px] opacity-60">
-                      {d.count} {t("analytics.requests")}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        <Section
+          title={t("analytics.destinationDistribution")}
+          icon={<MapPin size={16} />}
+          rightElement={
+            <Button
+              icon={isMapExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              minimal
+              onClick={() => setIsMapExpanded(!isMapExpanded)}
+              title={isMapExpanded ? t("analytics.minimize", "Minimize") : t("analytics.maximize", "Maximize")}
+            />
+          }
+        >
+          <DestinationMap
+            destinations={data?.destinations || []}
+            profileId={profileId || ""}
+            range={range}
+            customRange={customRange}
+            accessPointId={accessPointIdFilter || undefined}
+          />
         </Section>
       </div>
     </div>

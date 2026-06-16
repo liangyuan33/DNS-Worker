@@ -68,7 +68,7 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
   // 检查用户名是否存在接口
   if (url.pathname === '/api/auth/check-username' && request.method === 'GET') {
     const username = url.searchParams.get('username') || '';
-    if (!/^[a-zA-Z0-9]{5,15}$/.test(username)) {
+    if (!/^[a-z_][a-z0-9_-]{4,31}$/.test(username)) {
       return new Response(JSON.stringify({ error: "Invalid username" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     const exists = await userModel.getByUsername(username);
@@ -96,7 +96,7 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
         return new Response("Verification failed", { status: 400 });
       }
     }
-    if (!/^[a-zA-Z0-9]{5,15}$/.test(username)) return new Response("Invalid username", { status: 400 });
+    if (!/^[a-z_][a-z0-9_-]{4,31}$/.test(username)) return new Response("Invalid username", { status: 400 });
     if (!password || !PASSWORD_REGEX.test(password)) {
       return new Response("Password format error", { status: 400 });
     }
@@ -274,11 +274,14 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
     if (!refreshToken) return new Response("Refresh token missing", { status: 401 });
 
     const { latitude, longitude } = getRequestCoordinates(request);
-    const { session, user, newRefreshToken } = await rotateSession(env, refreshToken, latitude, longitude);
+    const { session, user, newRefreshToken, reason } = await rotateSession(env, refreshToken, latitude, longitude);
 
     if (!session || !user || !newRefreshToken) {
+      if (user) {
+        await activityLog.record(user.id, 'logout', clientIp, userAgent, { reason: reason || 'unknown' });
+      }
       await cacheUtils.isRateLimited(cache, `refresh_fail:${clientIp}`, 100, 60);
-      return new Response(JSON.stringify({ error: "Invalid refresh token" }), { 
+      return new Response(JSON.stringify({ error: "Invalid refresh token", reason: reason || "unknown" }), { 
         status: 401,
         headers: {
           "Set-Cookie": createBlankRefreshTokenCookie(),
@@ -313,7 +316,7 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
         const userId = await sessionModel.getSessionUserId(parsed.sid);
         await invalidateSession(env, parsed.sid);
         if (userId) {
-          await activityLog.record(userId, 'logout', clientIp, userAgent);
+          await activityLog.record(userId, 'logout', clientIp, userAgent, { reason: 'user_active' });
         }
       }
     }

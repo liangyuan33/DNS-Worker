@@ -9,6 +9,8 @@ import koKR from './locales/ko-KR.json';
 import frFR from './locales/fr-FR.json';
 import deDE from './locales/de-DE.json';
 import esES from './locales/es-ES.json';
+import ruRU from './locales/ru-RU.json';
+import viVN from './locales/de-DE.json';
 
 i18n
   .use(LanguageDetector)
@@ -27,6 +29,8 @@ i18n
       'fr-FR': { translation: frFR },
       'de-DE': { translation: deDE },
       'es-ES': { translation: esES },
+      'ru-RU': { translation: ruRU },
+      'vi-VN': { translation: viVN }
     },
     fallbackLng: 'en-US',
     interpolation: {

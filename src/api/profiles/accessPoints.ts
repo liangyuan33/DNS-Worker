@@ -36,7 +36,8 @@ export async function handleProfileAccessPointsRequest(
     if (currentAps.some(ap => ap.name.toLowerCase() === body.name.toLowerCase())) {
       return new Response("Access Point name already exists", { status: 400 });
     }
-    if (currentAps.length >= 100) return new Response("Access point limit exceeded (max 100)", { status: 400 });
+    const maxAps = Number(env.MAX_ACCESS_POINTS_PER_PROFILE) || 100;
+    if (currentAps.length >= maxAps) return new Response(`Access point limit exceeded (max ${maxAps})`, { status: 400 });
     
     const result = await apModel.addAccessPoint(profileId, body.name);
     return new Response(JSON.stringify(result), { status: 201, headers: { 'Content-Type': 'application/json' } });

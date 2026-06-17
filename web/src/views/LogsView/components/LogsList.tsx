@@ -73,7 +73,7 @@ export const LogsList: React.FC<LogsListProps> = ({
                 {log.record_type}
               </span>
               {log.access_point_name && (
-                <span className="text-[10px] opacity-50 truncate max-w-[100px]">
+                <span className="text-[10px] opacity-50 truncate max-w-25">
                   {log.access_point_name}
                 </span>
               )}

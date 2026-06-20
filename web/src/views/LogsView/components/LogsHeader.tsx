@@ -6,6 +6,8 @@ import type { AccessPoint } from "../../../types/auth";
 import { TimeRangeSelector } from "./TimeRangeSelector";
 import { StatusFilter } from "./StatusFilter";
 import { AccessPointFilter } from "./AccessPointFilter";
+import { DestCountryFilter } from "./DestCountryFilter";
+import { IspFilter } from "./IspFilter";
 
 export interface LogsHeaderProps {
   range: TimeRange;
@@ -22,6 +24,12 @@ export interface LogsHeaderProps {
   accessPointIdFilter: string | null;
   setAccessPointIdFilter: (val: string | null) => void;
   accessPoints: AccessPoint[];
+  destCountryFilter: string | null;
+  setDestCountryFilter: (val: string | null) => void;
+  countries: { country_code: string; country: string }[];
+  ispFilter: string | null;
+  setIspFilter: (val: string | null) => void;
+  isps: { name: string; count: number }[];
   searchQuery: string;
   setSearchQuery: (val: string) => void;
   stats: { total: number; pass: number; block: number; redirect: number } | null;
@@ -43,6 +51,12 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
   accessPointIdFilter,
   setAccessPointIdFilter,
   accessPoints,
+  destCountryFilter,
+  setDestCountryFilter,
+  countries,
+  ispFilter,
+  setIspFilter,
+  isps,
   searchQuery,
   setSearchQuery,
   stats,
@@ -133,6 +147,22 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
                 accessPointIdFilter={accessPointIdFilter}
                 setAccessPointIdFilter={setAccessPointIdFilter}
                 accessPoints={accessPoints}
+                isMobile={isMobile}
+              />
+            )}
+            {countries.length > 0 && (
+              <DestCountryFilter
+                destCountryFilter={destCountryFilter}
+                setDestCountryFilter={setDestCountryFilter}
+                countries={countries}
+                isMobile={isMobile}
+              />
+            )}
+            {isps.length > 0 && (
+              <IspFilter
+                ispFilter={ispFilter}
+                setIspFilter={setIspFilter}
+                isps={isps}
                 isMobile={isMobile}
               />
             )}

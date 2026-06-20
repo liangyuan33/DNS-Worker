@@ -19,6 +19,18 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Obein/ObexDNS)
 
+### 何以 Obex DNS？
+
+| | 傳統 DNS 方案 | Obex DNS |
+|---|---|---|
+| **託管** | 需要 VPS 或家用伺服器 | 運行於 Cloudflare 免費層級，免伺服器 |
+| **延遲** | 取決於伺服器位置 | 在全球 300+ 城市邊緣運算 |
+| **維護** | 手動更新、系統修補 | 免維護的 Serverless 部署 |
+| **擴展** | 受硬體限制 | 隨 Cloudflare 網路自動擴展 |
+| **成本** | 伺服器費用 + 電費 | 個人使用基本免費 |
+
+> 5 分鐘內部署您自己的隱私保護 DNS 解析器 —— 免信用卡、免伺服器、免維運。
+
 ### 什麼是 DNS over HTTPS (DoH)？
 
 DoH (RFC 8484) 是一種透過加密的 HTTPS 連線進行 DNS 查詢的協定。與傳統明文 DNS 相比，DoH 能夠：
@@ -196,4 +208,27 @@ npm run deploy
 
 ## 📄 開源協定
 
-本專案採用 AGPLv3 協定授權。
+本專案採用 [AGPLv3](LICENSE) 協定授權。
+
+---
+
+## 📝 總結
+
+Obex DNS 讓您完全掌控自己的 DNS 解析 —— 免租用伺服器、免管理基礎設施、隱私零妥協。假助 Cloudflare Workers 的全球邊緣網路和 D1 資料庫，可提供一個生產級 Protective DNS 服務：
+
+-   **免費運行** —— 基於 Cloudflare 慷慨的免費方案
+-   **全球極速** —— 得益於遍佈 300+ 個城市的邊緣節點
+-   **高度可自訂** —— 支援多配置規則、黑白名單及第三方過濾清單訂閱
+-   **隱私優先** —— 加密 DoH 傳輸，靈活的 ECS 控制
+-   **部署簡單** —— 一鍵部署或簡單的 `npm run deploy` 即可上線
+
+無論是保護單台裝置還是為家庭管理 DNS，Obex DNS 都提供了一個優雅的自託管替代方案 —— 免去商業 DNS 過濾服務的成本與複雜性。
+
+<div align="center">
+  <br>
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/Obein/ObexDNS">
+    <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare">
+  </a>
+  <br><br>
+  <b>如果 Obex DNS 對您有幫助，請考慮給它一個 ⭐ —— 您的支持是我們最大的動力！</b>
+</div>

@@ -56,14 +56,14 @@ export function useAuthAndProfiles(
 
   const checkAuthAndFetchData = async () => {
     try {
-      // 1. Check if we have a csrf_token cookie.
+      // Check if we have a csrf_token cookie.
       const hasCsrfToken = document.cookie.includes("csrf_token=");
       if (!hasCsrfToken) {
         setIsLoggedIn(false);
         return;
       }
 
-      // 2. If we don't have an access token in memory, try to refresh first.
+      // If we don't have an access token in memory, try to refresh first.
       if (!getAccessToken()) {
         try {
           const data = await refresh();
@@ -75,7 +75,7 @@ export function useAuthAndProfiles(
         }
       }
 
-      // 3. Fetch data (uses token automatically via fetch interceptor).
+      // Fetch data (uses token automatically via fetch interceptor).
       try {
         const [profilesData, meData] = await Promise.all([
           getProfiles(),

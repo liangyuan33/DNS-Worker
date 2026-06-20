@@ -1,4 +1,4 @@
-export function getCountryName(countryCode: string, locale: string = "en"): string {
+export function formatCountryName(countryCode: string, locale: string = "en"): string {
   if (!countryCode) return "";
   try {
     const regionNames = new Intl.DisplayNames([locale], { type: "region" });

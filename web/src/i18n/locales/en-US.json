@@ -49,6 +49,7 @@
     "system": "System"
   },
   "auth": {
+    "keepLoggedIn": "Keep me logged in for {{days}} days",
     "login": "Login to Obex DNS",
     "signup": "Create an account to start",
     "welcomeBack": "Welcome back, please enter your credentials",

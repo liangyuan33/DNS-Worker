@@ -67,8 +67,10 @@ IP_REGION_CN = """
 ]
 """
 # Time constants
-# Session duration for authenticated users (in days)
-SESSION_EXPIRATION_DAYS=1
+# Session duration for authenticated users by default (in minutes)
+DEFAULT_SESSION_EXPIRATION_MINUTES=1440
+# Session duration for authenticated users when keeping logged in option is selected (in days)
+OPTIONAL_SESSION_EXPIRATION_DAYS=7
 # Access Token expiration time (in minutes)
 ACCESS_TOKEN_EXPIRATION_MINUTES=1
 # Session idle timeout (in minutes) after which an inactive user is logged out

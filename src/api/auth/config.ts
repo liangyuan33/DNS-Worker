@@ -21,7 +21,8 @@ export async function handleAuthConfigRequest(request: Request, env: Env): Promi
     return new Response(JSON.stringify({
       turnstile_site_key: siteKey,
       turnstile_enabled_signup: signupEnabled === 'true',
-      turnstile_enabled_login: loginEnabled === 'true'
+      turnstile_enabled_login: loginEnabled === 'true',
+      optional_session_expiration_days: Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 30
     }), { headers: { 'Content-Type': 'application/json' } });
   }
 

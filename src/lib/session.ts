@@ -57,12 +57,20 @@ export async function createSession(
   ipAddress: string | null = null,
   userAgent: string | null = null,
   latitude: number | null = null,
-  longitude: number | null = null
+  longitude: number | null = null,
+  keepLoggedIn?: boolean
 ): Promise<{ session: Session; refreshToken: string }> {
-  const sessionId = generateId(SESSION_ID_LENGTH);
+  const prefix = keepLoggedIn ? "k_" : "s_";
+  const sessionId = prefix + generateId(SESSION_ID_LENGTH - 2);
   const now = Math.floor(Date.now() / 1000);
-  const expirationDays = Number(env.SESSION_EXPIRATION_DAYS) || 1;
-  const expiresAt = now + expirationDays * 24 * 60 * 60;
+  let expiresAt: number;
+  if (keepLoggedIn) {
+    const expirationDays = Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 30;
+    expiresAt = now + expirationDays * 24 * 60 * 60;
+  } else {
+    const expirationMinutes = Number(env.DEFAULT_SESSION_EXPIRATION_MINUTES) || 1440;
+    expiresAt = now + expirationMinutes * 60;
+  }
 
   const session: Session = {
     id: sessionId,
@@ -177,8 +185,10 @@ export async function rotateSession(
 
   // Session extension (if close to expiration)
   const timeRemaining = session.expires_at - Math.floor(Date.now() / 1000);
-  const expirationDays = Number(env.SESSION_EXPIRATION_DAYS) || 1;
-  const totalDurationInSeconds = expirationDays * 24 * 60 * 60;
+  const isKeepLoggedIn = session.id.startsWith("k_");
+  const totalDurationInSeconds = isKeepLoggedIn
+    ? (Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 30) * 24 * 60 * 60
+    : (Number(env.DEFAULT_SESSION_EXPIRATION_MINUTES) || 1440) * 60;
   const extensionThreshold = Math.floor(totalDurationInSeconds / 2);
   if (timeRemaining < extensionThreshold) {
     session.expires_at = Math.floor(Date.now() / 1000) + totalDurationInSeconds;

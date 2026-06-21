@@ -14,6 +14,7 @@ interface AuthConfig {
   turnstile_site_key: string;
   turnstile_enabled_signup: boolean;
   turnstile_enabled_login: boolean;
+  optional_session_expiration_days?: number;
 }
 
 /**
@@ -64,6 +65,8 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     turnstileStatus,
     turnstileRef,
     isTurnstileEnabled,
+    keepLoggedIn,
+    setKeepLoggedIn,
     handleStep1Submit,
     handleStep2Submit,
     resetToStep1
@@ -135,6 +138,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           loading={loading}
           onClearError={() => setError("")}
           onSubmit={handleStep2Submit}
+          keepLoggedIn={keepLoggedIn}
+          setKeepLoggedIn={setKeepLoggedIn}
+          optionalSessionExpirationDays={authConfig?.optional_session_expiration_days ?? 30}
         />
       )}
 

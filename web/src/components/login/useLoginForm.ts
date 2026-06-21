@@ -12,6 +12,7 @@ interface AuthConfig {
   turnstile_site_key: string;
   turnstile_enabled_signup: boolean;
   turnstile_enabled_login: boolean;
+  optional_session_expiration_days?: number;
 }
 
 export interface UseLoginFormProps {
@@ -38,6 +39,7 @@ export const useLoginForm = ({
   const [password, setPassword] = useState("");
   const [totpToken, setTotpToken] = useState("");
   const [recoveryKey, setRecoveryKey] = useState("");
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
 
   // Server response step requirements
   const [requiresPassword, setRequiresPassword] = useState(true);
@@ -156,7 +158,10 @@ export const useLoginForm = ({
         recoveryKey?: string;
         totpTokenHash?: string;
         totpSalt?: string;
-      } = {};
+        keepLoggedIn?: boolean;
+      } = {
+        keepLoggedIn
+      };
       if (requiresPassword) body.password = password;
       if (requiresTotp) {
         if (useRecovery) {
@@ -222,6 +227,8 @@ export const useLoginForm = ({
     turnstileStatus,
     turnstileRef,
     isTurnstileEnabled,
+    keepLoggedIn,
+    setKeepLoggedIn,
     handleStep1Submit,
     handleStep2Submit,
     resetToStep1

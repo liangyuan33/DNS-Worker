@@ -49,6 +49,7 @@
     "system": "跟隨系統"
   },
   "auth": {
+    "keepLoggedIn": "保持登入 {{days}} 天",
     "login": "登入 Obex DNS",
     "signup": "創建帳戶以開始",
     "welcomeBack": "歡迎回來，請輸入憑據",

@@ -88,7 +88,7 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     const user = await userModel.getById(userId);
     if (!user) return new Response("User not found", { status: 404 });
 
-    const { password, totpTokenHash, totpSalt, recoveryKey } = await request.json() as any;
+    const { password, totpTokenHash, totpSalt, recoveryKey, keepLoggedIn } = await request.json() as any;
 
     // 验证密码
     if (!user.totp_skip_password) {
@@ -137,7 +137,7 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     if (latitude === null || longitude === null) {
       return new Response("geolocation_missing", { status: 400 });
     }
-    const { session, refreshToken } = await createSession(env, userId, clientIp, userAgent, latitude, longitude);
+    const { session, refreshToken } = await createSession(env, userId, clientIp, userAgent, latitude, longitude, !!keepLoggedIn);
     const csrfToken = generateId(32);
     const csrfCookie = createCsrfCookie(csrfToken);
 
@@ -152,7 +152,7 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     }, jwtKey);
 
     const headers = new Headers({ "Content-Type": "application/json" });
-    headers.append("Set-Cookie", createRefreshTokenCookie(refreshToken, env));
+    headers.append("Set-Cookie", createRefreshTokenCookie(refreshToken, env, !!keepLoggedIn));
     headers.append("Set-Cookie", csrfCookie);
     headers.append("Set-Cookie", clearPreauthCookie());
     
@@ -196,7 +196,8 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     }, jwtKey);
 
     const headers = new Headers({ "Content-Type": "application/json" });
-    headers.append("Set-Cookie", createRefreshTokenCookie(newRefreshToken, env));
+    const isKeepLoggedIn = session.id.startsWith("k_");
+    headers.append("Set-Cookie", createRefreshTokenCookie(newRefreshToken, env, isKeepLoggedIn));
 
     return new Response(JSON.stringify({ success: true, accessToken }), { headers });
   }

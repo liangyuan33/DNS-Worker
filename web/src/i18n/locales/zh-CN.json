@@ -49,6 +49,7 @@
     "system": "跟随系统"
   },
   "auth": {
+    "keepLoggedIn": "保持登录 {{days}} 天",
     "login": "登录 Obex DNS",
     "signup": "创建账户以开始",
     "welcomeBack": "欢迎回来，请输入凭据",

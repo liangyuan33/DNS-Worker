@@ -6,9 +6,15 @@ export const PREAUTH_COOKIE_NAME = 'preauth_session';
 /**
  * Returns a serialized Set-Cookie header string for a new refresh token.
  */
-export function createRefreshTokenCookie(refreshToken: string, env: Env): string {
-  const expirationDays = Number(env.SESSION_EXPIRATION_DAYS) || 1;
-  const maxAge = expirationDays * 24 * 60 * 60;
+export function createRefreshTokenCookie(refreshToken: string, env: Env, keepLoggedIn?: boolean): string {
+  let maxAge: number;
+  if (keepLoggedIn) {
+    const expirationDays = Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 30;
+    maxAge = expirationDays * 24 * 60 * 60;
+  } else {
+    const expirationMinutes = Number(env.DEFAULT_SESSION_EXPIRATION_MINUTES) || 1440;
+    maxAge = expirationMinutes * 60;
+  }
   return `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}; Secure`;
 }
 

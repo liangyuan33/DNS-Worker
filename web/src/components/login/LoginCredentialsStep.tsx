@@ -1,5 +1,5 @@
 import React from "react";
-import { FormGroup, InputGroup, Button, Intent } from "@blueprintjs/core";
+import { FormGroup, InputGroup, Button, Intent, Checkbox } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 
 /**
@@ -32,6 +32,12 @@ export interface LoginCredentialsStepProps {
   onClearError: () => void;
   /** Callback to handle the form submission. */
   onSubmit: (e: React.FormEvent) => void;
+  /** Whether the user wants to stay logged in. */
+  keepLoggedIn: boolean;
+  /** Callback to toggle stay logged in. */
+  setKeepLoggedIn: (val: boolean) => void;
+  /** Optional session expiration duration in days. */
+  optionalSessionExpirationDays: number;
 }
 
 /**
@@ -54,7 +60,10 @@ export const LoginCredentialsStep: React.FC<LoginCredentialsStepProps> = ({
   setRecoveryKey,
   loading,
   onClearError,
-  onSubmit
+  onSubmit,
+  keepLoggedIn,
+  setKeepLoggedIn,
+  optionalSessionExpirationDays
 }) => {
   const [showPassword, setShowPassword] = React.useState(false);
   const { t } = useTranslation();
@@ -170,6 +179,13 @@ export const LoginCredentialsStep: React.FC<LoginCredentialsStepProps> = ({
           </div>
         </>
       )}
+
+      <Checkbox
+        checked={keepLoggedIn}
+        onChange={(e) => setKeepLoggedIn(e.currentTarget.checked)}
+        label={t("auth.keepLoggedIn", "Keep me logged in for {{days}} days", { days: optionalSessionExpirationDays })}
+        className="mt-4 text-left"
+      />
 
       <Button
         fill

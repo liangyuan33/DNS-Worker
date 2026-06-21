@@ -16,6 +16,7 @@ export interface AuthConfig {
   turnstile_site_key: string;
   turnstile_enabled_signup: boolean;
   turnstile_enabled_login: boolean;
+  optional_session_expiration_days?: number;
 }
 
 /**

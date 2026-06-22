@@ -2,30 +2,28 @@ import { Env } from "../../types";
 import {
   generateId,
   createSession, createRefreshTokenCookie,
-  readRefreshTokenCookie, invalidateSession, createBlankRefreshTokenCookie,
   createPreauthSession, createPreauthCookie,
   validatePreauthSession, invalidatePreauthSession, clearPreauthCookie,
   readPreauthCookie,
   recordFailedPreauthAttempt,
   getRequestCoordinates,
   createCsrfCookie,
-  getOrCreateJwtSecret, rotateSession, parseRefreshTokenString,
+  getOrCreateJwtSecret,
   extractSaltHex, hmacSha256
 } from "../../lib/auth";
-import { importJwtSecret, signJWT, verifyJWT } from "../../lib/jwt";
-import { verifyPassword, verifyPinServer } from "../../utils/crypto";
+import { importJwtSecret, signJWT } from "../../lib/jwt";
+import { verifyPassword } from "../../utils/crypto";
 import { verifyTOTP, findMatchingRecoveryKey } from "../../lib/totp";
 import { UserModel } from "../../models/user";
 import { ActivityLogModel } from "../../models/activityLog";
 import { SystemSettingsModel } from "../../models/systemSettings";
-import { SessionModel } from "../../models/session";
 import { cacheUtils } from "../../utils/cache";
 import { verifyTurnstile } from "./utils";
 
 /**
- * Handle session lifecycle: prelogin, login, token refresh, and logout
+ * Handle prelogin and login requests
  */
-export async function handleAuthSessionRequest(request: Request, env: Env): Promise<Response> {
+export async function handleLoginRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const userModel = new UserModel(env.DB);
   const activityLog = new ActivityLogModel(env.DB);
@@ -218,176 +216,6 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     headers.append("Set-Cookie", clearPreauthCookie());
     
     return new Response(JSON.stringify({ success: true, accessToken, needsMigration }), { headers });
-  }
-
-  // 刷新 Token
-  if (url.pathname === '/api/auth/refresh' && request.method === 'POST') {
-    if (await cacheUtils.isRateLimited(cache, `refresh_fail:${clientIp}`, 20, 60)) {
-      return new Response("Too many attempts", { status: 429 });
-    }
-
-    const refreshToken = readRefreshTokenCookie(request.headers.get("Cookie"));
-    if (!refreshToken) return new Response("Refresh token missing", { status: 401 });
-
-    const { latitude, longitude } = getRequestCoordinates(request);
-    const { session, user, newRefreshToken, reason } = await rotateSession(env, refreshToken, latitude, longitude);
-
-    if (!session || !user || !newRefreshToken) {
-      if (user) {
-        await activityLog.record(user.id, 'logout', clientIp, userAgent, { reason: reason || 'unknown' });
-      }
-      await cacheUtils.isRateLimited(cache, `refresh_fail:${clientIp}`, 100, 60);
-      return new Response(JSON.stringify({ error: "Invalid refresh token", reason: reason || "unknown" }), { 
-        status: 401,
-        headers: {
-          "Set-Cookie": createBlankRefreshTokenCookie(),
-          "Content-Type": "application/json"
-        }
-      });
-    }
-
-    const secret = await getOrCreateJwtSecret(env);
-    const jwtKey = await importJwtSecret(secret);
-    const expMinutes = Number(env.ACCESS_TOKEN_EXPIRATION_MINUTES) || 10;
-    const accessToken = await signJWT({ 
-      userId: user.id, 
-      role: user.role, 
-      sessionId: session.id,
-      exp: Math.floor(Date.now() / 1000) + expMinutes * 60
-    }, jwtKey);
-
-    const headers = new Headers({ "Content-Type": "application/json" });
-    const isKeepLoggedIn = session.id.startsWith("k_");
-    headers.append("Set-Cookie", createRefreshTokenCookie(newRefreshToken, env, isKeepLoggedIn));
-
-    return new Response(JSON.stringify({ success: true, accessToken }), { headers });
-  }
-
-  // 登出
-  if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-    const refreshToken = readRefreshTokenCookie(request.headers.get("Cookie"));
-    if (refreshToken) {
-      // Validate refresh token just enough to get the session ID and invalidate it
-      const parsed = parseRefreshTokenString(refreshToken);
-      if (parsed) {
-        const sessionModel = new SessionModel(env.DB);
-        const userId = await sessionModel.getSessionUserId(parsed.sid);
-        await invalidateSession(env, parsed.sid);
-        if (userId) {
-          await activityLog.record(userId, 'logout', clientIp, userAgent, { reason: 'user_active' });
-        }
-      }
-    }
-    const responseHeaders = new Headers({ "Content-Type": "application/json" });
-    responseHeaders.append("Set-Cookie", createBlankRefreshTokenCookie());
-    responseHeaders.append("Set-Cookie", "csrf_token=; SameSite=Lax; Path=/; Max-Age=0; Secure");
-    return new Response(JSON.stringify({ success: true }), {
-      headers: responseHeaders
-    });
-  }
-
-  // 解锁会话
-  if (url.pathname === '/api/auth/unlock-session' && request.method === 'POST') {
-    const authHeader = request.headers.get("Authorization") || "";
-    let accessToken = "";
-    if (authHeader.startsWith("Bearer ")) {
-      accessToken = authHeader.slice(7);
-    }
-    if (!accessToken) return new Response("Unauthorized", { status: 401 });
-
-    try {
-      const secret = await getOrCreateJwtSecret(env);
-      const jwtKey = await importJwtSecret(secret);
-      const payload = await verifyJWT<{ userId: string; role: string; sessionId: string; exp: number }>(
-        accessToken,
-        jwtKey
-      );
-      if (!payload) return new Response("Unauthorized", { status: 401 });
-
-      const { pinHash } = await request.json() as any;
-      if (!pinHash) return new Response("Missing pinHash", { status: 400 });
-
-      // 验证 Session 存在
-      const sessionModel = new SessionModel(env.DB);
-      const session = await sessionModel.getSession(payload.sessionId);
-      if (!session) return new Response("Session not found", { status: 401 });
-
-      // 验证用户的 PIN
-      const dbUser = await userModel.getById(payload.userId);
-      if (!dbUser || !dbUser.pin_hash) return new Response("PIN not configured", { status: 400 });
-
-      const cacheKey = `unlock_fail:${session.id}`;
-      const failedAttemptsState = await cacheUtils.get<{ count: number }>(cache, cacheKey);
-      const failedAttempts = failedAttemptsState?.count || 0;
-
-      const isPinValid = await verifyPinServer(pinHash, dbUser.pin_hash);
-      if (!isPinValid) {
-        const nextFailedCount = failedAttempts + 1;
-        if (nextFailedCount >= 3) {
-          // 超过 3 次失败，销毁 Session 强制登出
-          await sessionModel.deleteSession(session.id);
-          await cacheUtils.delete(cache, cacheKey);
-          await activityLog.record(payload.userId, 'pin_verify_fail', clientIp, userAgent, { reason: 'too_many_attempts' });
-          return new Response(JSON.stringify({ success: false, error: "too_many_attempts" }), {
-            status: 401,
-            headers: { "Content-Type": "application/json" }
-          });
-        }
-        await cacheUtils.set(cache, cacheKey, { count: nextFailedCount }, 900); // 15分钟锁定追踪
-        await activityLog.record(payload.userId, 'pin_verify_fail', clientIp, userAgent, { reason: 'incorrect_pin', attempt: nextFailedCount });
-        return new Response(JSON.stringify({
-          success: false,
-          error: "incorrect_pin",
-          attemptsRemaining: 3 - nextFailedCount
-        }), {
-          status: 400,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-
-      // 验证成功：恢复会话状态
-      const now = Math.floor(Date.now() / 1000);
-      await sessionModel.resumeSession(session.id, now);
-      await cacheUtils.delete(cache, cacheKey);
-      await activityLog.record(payload.userId, 'pin_verify_success', clientIp, userAgent);
-
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { "Content-Type": "application/json" }
-      });
-    } catch (e: any) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-  }
-
-  // 锁定会话
-  if (url.pathname === '/api/auth/lock-session' && request.method === 'POST') {
-    const authHeader = request.headers.get("Authorization") || "";
-    let accessToken = "";
-    if (authHeader.startsWith("Bearer ")) {
-      accessToken = authHeader.slice(7);
-    }
-    if (!accessToken) return new Response("Unauthorized", { status: 401 });
-
-    try {
-      const secret = await getOrCreateJwtSecret(env);
-      const jwtKey = await importJwtSecret(secret);
-      const payload = await verifyJWT<{ userId: string; role: string; sessionId: string; exp: number }>(
-        accessToken,
-        jwtKey
-      );
-      if (!payload) return new Response("Unauthorized", { status: 401 });
-
-      const sessionModel = new SessionModel(env.DB);
-      const session = await sessionModel.getSession(payload.sessionId);
-      if (!session) return new Response("Session not found", { status: 401 });
-
-      await sessionModel.pauseSession(session.id);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { "Content-Type": "application/json" }
-      });
-    } catch (e: any) {
-      return new Response("Unauthorized", { status: 401 });
-    }
   }
 
   return new Response("Not Found", { status: 404 });

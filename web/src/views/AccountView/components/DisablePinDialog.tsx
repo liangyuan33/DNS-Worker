@@ -35,7 +35,7 @@ export const DisablePinDialog: React.FC<DisablePinDialogProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleClearPin = async (e?: React.FormEvent) => {
+  const handleClearPin = async (e?: React.FormEvent, totpValue?: string) => {
     if (e) e.preventDefault();
     setLoading(true);
     setError("");
@@ -44,7 +44,8 @@ export const DisablePinDialog: React.FC<DisablePinDialogProps> = ({
       const verificationPayload: { password?: string; totpTokenHash?: string; totpSalt?: string } = {};
       if (user?.totp_enabled && useTotpForVerify) {
         const salt = crypto.randomUUID();
-        const hashHex = await hashTotpToken(verifyTotp.replace(/\s/g, ""), salt);
+        const finalTotp = totpValue || verifyTotp;
+        const hashHex = await hashTotpToken(finalTotp.replace(/\s/g, ""), salt);
         verificationPayload.totpTokenHash = hashHex;
         verificationPayload.totpSalt = salt;
       } else {
@@ -127,7 +128,7 @@ export const DisablePinDialog: React.FC<DisablePinDialogProps> = ({
                 value={verifyTotp}
                 onChange={setVerifyTotp}
                 disabled={loading}
-                onComplete={() => handleClearPin()}
+                onComplete={(val) => handleClearPin(undefined, val)}
               />
             </FormGroup>
           ) : (

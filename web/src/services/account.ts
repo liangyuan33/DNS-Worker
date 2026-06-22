@@ -26,7 +26,12 @@ export async function getMe(): Promise<UserInfo> {
   return res.json();
 }
 
-export async function updateMe(payload: { username?: string | null; timezone?: string | null; locale?: string | null }): Promise<UserInfo> {
+export async function updateMe(payload: {
+  username?: string | null;
+  timezone?: string | null;
+  locale?: string | null;
+  session_lock_timeout?: number;
+}): Promise<UserInfo> {
   const res = await fetch("/api/account/me", {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

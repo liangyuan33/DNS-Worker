@@ -111,7 +111,8 @@
     "sessionExpired": "Zu viele Fehlversuche. Sitzung beendet.",
     "pinIncorrect": "Falsche PIN",
     "attemptsRemaining": "{{count}} verbleibende Versuche",
-    "logoutAndReturn": "Sitzung abmelden"
+    "logoutAndReturn": "Sitzung abmelden",
+    "lockNow": "Jetzt sperren"
   },
   "setup": {
     "title": "Installationsanleitung",

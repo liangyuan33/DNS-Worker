@@ -26,7 +26,8 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
     path === '/api/auth/login' ||
     path === '/api/auth/refresh' ||
     path === '/api/auth/logout' ||
-    path === '/api/auth/unlock-session'
+    path === '/api/auth/unlock-session' ||
+    path === '/api/auth/lock-session'
   ) {
     return handleAuthSessionRequest(request, env);
   }

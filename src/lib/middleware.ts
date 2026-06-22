@@ -60,6 +60,18 @@ export async function getCurrentUser(request: Request, env: Env): Promise<User |
       const now = Math.floor(Date.now() / 1000);
       const lastActive = session.last_active_at || session.created_at;
 
+      // Single Source of Truth inactivity check on server
+      const userModel = new UserModel(env.DB);
+      const dbUser = await userModel.getById(payload.userId);
+
+      if (dbUser && dbUser.pin_hash && !session.is_paused) {
+        const timeoutSeconds = (dbUser.session_lock_timeout || 15) * 60;
+        if (now - lastActive > timeoutSeconds) {
+          await sessionModel.pauseSession(session.id);
+          session.is_paused = 1;
+        }
+      }
+
       if (session.is_paused) {
         return { id: payload.userId, username: "", role: payload.role as any, isPaused: true, sessionId: payload.sessionId };
       }

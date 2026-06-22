@@ -8,7 +8,7 @@ interface DigitInputProps {
   type?: "text" | "password";
   error?: boolean;
   autoFocus?: boolean;
-  onComplete?: () => void;
+  onComplete?: (value: string) => void;
 }
 
 export interface DigitInputRef {
@@ -65,7 +65,7 @@ export const DigitInput = forwardRef<DigitInputRef, DigitInputProps>(({
     if (index < length - 1) {
       inputsRef.current[index + 1]?.focus();
     } else if (joined.length === length) {
-      onComplete?.();
+      onComplete?.(joined);
     }
   };
 
@@ -102,7 +102,7 @@ export const DigitInput = forwardRef<DigitInputRef, DigitInputProps>(({
       inputsRef.current[focusIndex]?.focus();
       
       if (cleaned.length === length) {
-        onComplete?.();
+        onComplete?.(cleaned);
       }
     }
   };

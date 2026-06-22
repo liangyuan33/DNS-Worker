@@ -111,7 +111,8 @@
     "sessionExpired": "Trop de tentatives échouées. Session terminée.",
     "pinIncorrect": "Code PIN incorrect",
     "attemptsRemaining": "{{count}} tentatives restantes",
-    "logoutAndReturn": "Déconnecter la session"
+    "logoutAndReturn": "Déconnecter la session",
+    "lockNow": "Verrouiller maintenant"
   },
   "setup": {
     "title": "Guide d'installation",

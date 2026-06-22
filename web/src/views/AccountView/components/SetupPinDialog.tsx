@@ -40,7 +40,7 @@ export const SetupPinDialog: React.FC<SetupPinDialogProps> = ({
   const confirmPinRef = useRef<DigitInputRef>(null);
   const totpRef = useRef<DigitInputRef>(null);
 
-  const handleSetupPin = async (e?: React.FormEvent) => {
+  const handleSetupPin = async (e?: React.FormEvent, totpValue?: string) => {
     if (e) e.preventDefault();
     if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
       setError(t("auth.pinFormatTip", "PIN must be exactly 4 digits"));
@@ -60,7 +60,8 @@ export const SetupPinDialog: React.FC<SetupPinDialogProps> = ({
       const verificationPayload: { password?: string; totpTokenHash?: string; totpSalt?: string } = {};
       if (user?.totp_enabled && useTotpForVerify) {
         const salt = crypto.randomUUID();
-        const hashHex = await hashTotpToken(verifyTotp.replace(/\s/g, ""), salt);
+        const finalTotp = totpValue || verifyTotp;
+        const hashHex = await hashTotpToken(finalTotp.replace(/\s/g, ""), salt);
         verificationPayload.totpTokenHash = hashHex;
         verificationPayload.totpSalt = salt;
       } else {
@@ -182,7 +183,7 @@ export const SetupPinDialog: React.FC<SetupPinDialogProps> = ({
                 value={verifyTotp}
                 onChange={setVerifyTotp}
                 disabled={loading}
-                onComplete={() => handleSetupPin()}
+                onComplete={(val) => handleSetupPin(undefined, val)}
               />
             </FormGroup>
           ) : (

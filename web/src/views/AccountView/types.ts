@@ -11,6 +11,7 @@ export interface UserInfo {
   locale?: string | null;
   password_version?: number;
   pin_enabled?: boolean;
+  session_lock_timeout?: number;
 }
 
 export interface ActivityEntry {

@@ -111,7 +111,8 @@
     "sessionExpired": "嘗試次數過多，會話已終結。",
     "pinIncorrect": "PIN 碼錯誤",
     "attemptsRemaining": "還剩 {{count}} 次嘗試機會",
-    "logoutAndReturn": "登出會話"
+    "logoutAndReturn": "登出會話",
+    "lockNow": "立即鎖定"
   },
   "setup": {
     "title": "安裝指南",

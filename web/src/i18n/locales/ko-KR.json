@@ -111,7 +111,8 @@
     "sessionExpired": "실패 횟수가 너무 많습니다. 세션이 종료되었습니다.",
     "pinIncorrect": "올바르지 않은 PIN",
     "attemptsRemaining": "남은 시도 횟수: {{count}}회",
-    "logoutAndReturn": "세션 로그아웃"
+    "logoutAndReturn": "세션 로그아웃",
+    "lockNow": "지금 잠금"
   },
   "setup": {
     "title": "설치 가이드",

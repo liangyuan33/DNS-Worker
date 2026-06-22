@@ -115,3 +115,8 @@ export async function unlockSession(pinHash: string): Promise<void> {
   });
   if (!res.ok) throw new ApiError(res.status, await res.text());
 }
+
+export async function lockSession(): Promise<void> {
+  const res = await fetch("/api/auth/lock-session", { method: "POST" });
+  if (!res.ok) throw new ApiError(res.status, await res.text());
+}

@@ -5,11 +5,11 @@ import {
   Elevation,
   H4,
   Button,
-  Switch,
   HTMLSelect,
   Intent
 } from "@blueprintjs/core";
 import { ShieldCheck } from "lucide-react";
+import { updateMe, lockSession } from "../../../services";
 import type { UserInfo } from "../../../services";
 import { SetupPinDialog } from "./SetupPinDialog";
 import { DisablePinDialog } from "./DisablePinDialog";
@@ -22,35 +22,26 @@ interface SessionLockCardProps {
 export const SessionLockCard: React.FC<SessionLockCardProps> = ({ user, onRefresh }) => {
   const { t } = useTranslation();
 
-  // Local state for lock configuration
-  const [lockEnabled, setLockEnabled] = useState<boolean>(() => {
-    return localStorage.getItem("obex_session_lock_enabled") === "true";
-  });
-  const [timeout, setTimeoutVal] = useState<number>(() => {
-    return Number(localStorage.getItem("obex_session_lock_timeout")) || 15;
-  });
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Modal / Setup state
   const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   const [disableDialogOpen, setDisableDialogOpen] = useState(false);
 
   const isPinEnabled = !!user?.pin_enabled;
+  const timeout = user?.session_lock_timeout || 15;
 
-  const handleToggleLock = (e: React.FormEvent<HTMLInputElement>) => {
-    const checked = e.currentTarget.checked;
-    if (checked && !isPinEnabled) {
-      // Must set a PIN first
-      setSetupDialogOpen(true);
-    } else {
-      setLockEnabled(checked);
-      localStorage.setItem("obex_session_lock_enabled", checked ? "true" : "false");
-    }
-  };
-
-  const handleTimeoutChange = (e: React.FormEvent<HTMLSelectElement>) => {
+  const handleTimeoutChange = async (e: React.FormEvent<HTMLSelectElement>) => {
     const val = Number(e.currentTarget.value);
-    setTimeoutVal(val);
-    localStorage.setItem("obex_session_lock_timeout", val.toString());
+    setLoading(true);
+    try {
+      await updateMe({ session_lock_timeout: val });
+      onRefresh();
+    } catch (err) {
+      console.error("Failed to change session lock timeout", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOpenSetup = () => {
@@ -63,16 +54,24 @@ export const SessionLockCard: React.FC<SessionLockCardProps> = ({ user, onRefres
 
   const handleSetupSuccess = () => {
     setSetupDialogOpen(false);
-    setLockEnabled(true);
-    localStorage.setItem("obex_session_lock_enabled", "true");
     onRefresh();
   };
 
   const handleDisableSuccess = () => {
     setDisableDialogOpen(false);
-    setLockEnabled(false);
-    localStorage.setItem("obex_session_lock_enabled", "false");
     onRefresh();
+  };
+
+  const handleLockNow = async () => {
+    setLoading(true);
+    try {
+      await lockSession();
+      window.dispatchEvent(new Event("session_paused"));
+    } catch (err) {
+      console.error("Failed to lock session immediately", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -94,20 +93,11 @@ export const SessionLockCard: React.FC<SessionLockCardProps> = ({ user, onRefres
       {/* Configurations */}
       <div className="flex flex-col gap-4 mb-4">
         <div className="flex items-center justify-between">
-          <span>{t("auth.enableSessionLock", "Enable Session Lock")}</span>
-          <Switch
-            checked={lockEnabled && isPinEnabled}
-            onChange={handleToggleLock}
-            className="m-0"
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
           <span>{t("auth.inactivityTimeout", "Inactivity Timeout")}</span>
           <HTMLSelect
             value={timeout}
             onChange={handleTimeoutChange}
-            disabled={!isPinEnabled}
+            disabled={!isPinEnabled || loading}
             options={[
               { label: t("auth.timeout1m", "1 Minute"), value: 1 },
               { label: t("auth.timeout2m", "2 Minutes"), value: 2 },
@@ -121,18 +111,21 @@ export const SessionLockCard: React.FC<SessionLockCardProps> = ({ user, onRefres
       </div>
 
       {/* PIN configuration controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         {isPinEnabled ? (
           <>
-            <Button icon="edit" onClick={handleOpenSetup}>
+            <Button icon="edit" onClick={handleOpenSetup} disabled={loading}>
               {t("auth.changePin", "Change PIN")}
             </Button>
-            <Button icon="trash" intent={Intent.DANGER} onClick={handleOpenDisable}>
+            <Button icon="trash" intent={Intent.DANGER} onClick={handleOpenDisable} disabled={loading}>
               {t("auth.disablePin", "Disable PIN & Lock")}
+            </Button>
+            <Button icon="lock" intent={Intent.WARNING} onClick={handleLockNow} disabled={loading}>
+              {t("auth.lockNow", "Lock Now")}
             </Button>
           </>
         ) : (
-          <Button icon="key" intent={Intent.PRIMARY} onClick={handleOpenSetup}>
+          <Button icon="key" intent={Intent.PRIMARY} onClick={handleOpenSetup} disabled={loading}>
             {t("auth.configurePin", "Configure 4-Digit PIN")}
           </Button>
         )}

@@ -111,7 +111,8 @@
     "sessionExpired": "試行回数が多すぎます。セッションが終了しました。",
     "pinIncorrect": "PINが正しくありません",
     "attemptsRemaining": "残り試行回数: {{count}}回",
-    "logoutAndReturn": "セッションからログアウト"
+    "logoutAndReturn": "セッションからログアウト",
+    "lockNow": "今すぐロック"
   },
   "setup": {
     "title": "インストールガイド",

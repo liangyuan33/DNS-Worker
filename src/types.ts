@@ -38,6 +38,7 @@ export interface User {
   pin_hash?: string | null;
   isPaused?: boolean;
   sessionId?: string;
+  session_lock_timeout?: number;
 }
 
 export interface UserActivityLog {

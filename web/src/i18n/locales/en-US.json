@@ -111,7 +111,8 @@
     "sessionExpired": "Too many failed attempts. Session terminated.",
     "pinIncorrect": "Incorrect PIN",
     "attemptsRemaining": "{{count}} attempts remaining",
-    "logoutAndReturn": "Log Out Session"
+    "logoutAndReturn": "Log Out Session",
+    "lockNow": "Lock Now"
   },
   "setup": {
     "title": "Setup Guide",

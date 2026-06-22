@@ -111,7 +111,8 @@
     "sessionExpired": "Demasiados intentos fallidos. Sesión terminada.",
     "pinIncorrect": "PIN incorrecto",
     "attemptsRemaining": "{{count}} intentos restantes",
-    "logoutAndReturn": "Cerrar sesión"
+    "logoutAndReturn": "Cerrar sesión",
+    "lockNow": "Bloquear ahora"
   },
   "setup": {
     "title": "Guía de instalación",

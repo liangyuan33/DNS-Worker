@@ -111,7 +111,8 @@
     "sessionExpired": "Слишком много неудачных попыток. Сессия завершена.",
     "pinIncorrect": "Неверный PIN-код",
     "attemptsRemaining": "Осталось попыток: {{count}}",
-    "logoutAndReturn": "Выйти из сессии"
+    "logoutAndReturn": "Выйти из сессии",
+    "lockNow": "Заблокировать сейчас"
   },
   "setup": {
     "title": "Руководство по установке",

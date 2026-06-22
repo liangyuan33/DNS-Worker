@@ -70,6 +70,13 @@ export class UserModel {
     return result.success;
   }
 
+  async updateSessionLockTimeout(id: string, timeout: number): Promise<boolean> {
+    const result = await this.db.prepare(
+      "UPDATE users SET session_lock_timeout = ? WHERE id = ?"
+    ).bind(timeout, id).run();
+    return result.success;
+  }
+
   async delete(id: string): Promise<boolean> {
     const result = await this.db.prepare("DELETE FROM users WHERE id = ?").bind(id).run();
     return result.success;

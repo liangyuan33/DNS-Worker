@@ -359,5 +359,36 @@ export async function handleAuthSessionRequest(request: Request, env: Env): Prom
     }
   }
 
+  // 锁定会话
+  if (url.pathname === '/api/auth/lock-session' && request.method === 'POST') {
+    const authHeader = request.headers.get("Authorization") || "";
+    let accessToken = "";
+    if (authHeader.startsWith("Bearer ")) {
+      accessToken = authHeader.slice(7);
+    }
+    if (!accessToken) return new Response("Unauthorized", { status: 401 });
+
+    try {
+      const secret = await getOrCreateJwtSecret(env);
+      const jwtKey = await importJwtSecret(secret);
+      const payload = await verifyJWT<{ userId: string; role: string; sessionId: string; exp: number }>(
+        accessToken,
+        jwtKey
+      );
+      if (!payload) return new Response("Unauthorized", { status: 401 });
+
+      const sessionModel = new SessionModel(env.DB);
+      const session = await sessionModel.getSession(payload.sessionId);
+      if (!session) return new Response("Session not found", { status: 401 });
+
+      await sessionModel.pauseSession(session.id);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" }
+      });
+    } catch (e: any) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+  }
+
   return new Response("Not Found", { status: 404 });
 }

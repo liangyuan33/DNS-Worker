@@ -111,7 +111,8 @@
     "sessionExpired": "Quá nhiều lần thử thất bại. Phiên đã bị chấm dứt.",
     "pinIncorrect": "Mã PIN không chính xác",
     "attemptsRemaining": "Còn lại {{count}} lần thử",
-    "logoutAndReturn": "Đăng xuất phiên"
+    "logoutAndReturn": "Đăng xuất phiên",
+    "lockNow": "Khóa ngay"
   },
   "setup": {
     "title": "Hướng dẫn cài đặt",

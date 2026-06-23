@@ -1,7 +1,7 @@
 import { Env } from "../../types";
 import { getOrCreateJwtSecret, generateSessionHash } from "../../lib/auth";
 import { importJwtSecret, verifyJWT } from "../../lib/jwt";
-import { hashPin } from "../../utils/crypto";
+import { generateId, hashPin } from "../../utils/crypto";
 import { UserModel } from "../../models/user";
 import { ActivityLogModel } from "../../models/activityLog";
 import { SessionModel } from "../../models/session";

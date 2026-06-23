@@ -113,11 +113,11 @@ export async function getUnlockNonce(): Promise<{ nonce: string }> {
   return res.json();
 }
 
-export async function unlockSession(pinHash: string): Promise<void> {
+export async function unlockSession(pinHash: string, nonce: string): Promise<void> {
   const res = await fetch("/api/auth/unlock-session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pinHash })
+    body: JSON.stringify({ pinHash, nonce })
   });
   if (!res.ok) throw new ApiError(res.status, await res.text());
 }

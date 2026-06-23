@@ -118,7 +118,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
       // Compute challengedHash = hashPin(pinHash, nonce)
       const challengedHash = await hashPin(pinHash, nonce);
 
-      await unlockSession(challengedHash);
+      await unlockSession(challengedHash, nonce);
       
       // Success! Unlock session
       setIsLocked(false);

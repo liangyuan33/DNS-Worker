@@ -66,8 +66,9 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
       );
       if (!payload) return new Response("Unauthorized", { status: 401 });
 
-      const { pinHash } = await request.json() as any;
+      const { pinHash, nonce } = await request.json() as any;
       if (!pinHash) return new Response("Missing pinHash", { status: 400 });
+      if (!nonce) return new Response("Missing nonce", { status: 400 });
 
       // 验证 Session 存在
       const sessionModel = new SessionModel(env.DB);
@@ -84,10 +85,15 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
       if (!cachedNonceState?.nonce) {
         return new Response("Challenge expired, please start over", { status: 400 });
       }
-      const { nonce } = cachedNonceState;
+      const cachedNonce = cachedNonceState.nonce;
 
       // 消费掉 nonce 防止重放
       await cacheUtils.delete(cache, cacheKeyNonce);
+
+      // 验证客户端提交的 nonce 是否与缓存的 nonce 一致
+      if (nonce !== cachedNonce) {
+        return new Response("Invalid nonce", { status: 400 });
+      }
 
       const cacheKey = `unlock_fail:${session.id}`;
       const failedAttemptsState = await cacheUtils.get<{ count: number }>(cache, cacheKey);
@@ -95,8 +101,8 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
 
       const sessionHash = await generateSessionHash(session.id, payload.userId);
 
-      // 验证挑战响应：hashPin(dbUser.pin_hash, nonce)
-      const expectedChallengedHash = await hashPin(dbUser.pin_hash, nonce);
+      // 验证挑战响应：hashPin(dbUser.pin_hash, cachedNonce)
+      const expectedChallengedHash = await hashPin(dbUser.pin_hash, cachedNonce);
       
       // Constant-time comparison
       let isPinValid = true;

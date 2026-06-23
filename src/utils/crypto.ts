@@ -1,4 +1,60 @@
 /**
+ * Low-level PBKDF2 key derivation using Web Crypto API.
+ * Single responsibility: performing the raw cryptographic derivation.
+ */
+export async function pbkdf2(
+  data: string,
+  salt: Uint8Array,
+  iterations: number,
+  keyLength: number = 256
+): Promise<Uint8Array> {
+  const encoder = new TextEncoder();
+  const dataBuffer = encoder.encode(data);
+
+  const baseKey = await crypto.subtle.importKey(
+    "raw",
+    dataBuffer,
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+
+  const hashBuffer = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: salt,
+      iterations: iterations,
+      hash: "SHA-256"
+    },
+    baseKey,
+    keyLength
+  );
+
+  return new Uint8Array(hashBuffer);
+}
+
+/**
+ * Hashes a password/string using PBKDF2 and formats the result as a hex string.
+ * @param data - The data to hash.
+ * @param salt - The optional salt. If not provided, a random 16-byte salt is generated.
+ * @param iterations - The number of iterations (default 100,000).
+ * @param keyLength - The derived key length in bits (default 256).
+ */
+export async function hashWithPBKDF2(
+  data: string,
+  salt?: Uint8Array,
+  iterations: number = 100000,
+  keyLength: number = 256
+): Promise<string> {
+  const actualSalt = salt ?? crypto.getRandomValues(new Uint8Array(16));
+  const derived = await pbkdf2(data, actualSalt, iterations, keyLength);
+
+  return Array.from(derived)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
  * Simple PBKDF2 implementation using Web Crypto API for Cloudflare Workers
  * - Uses SHA-256 with 100,000 iterations for password hashing (configurable)
  * - Generates a random 16-byte salt for each password
@@ -10,48 +66,22 @@
  * @param version - The hashing version to use (default 1). Version 2 uses fewer iterations for faster hashing.
  * @returns A base64-encoded string containing the salt and hash for storage.
  */
-export async function hashPassword(password: string, version: number = 1): Promise<string> {
-  const encoder = new TextEncoder();
-  const passwordBuffer = encoder.encode(password);
-  
-  // Generate a random salt
+export async function hashPassword(
+  password: string,
+  version: number = 1
+): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  
-  // Import the password as a key
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    passwordBuffer,
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-  
   const iterations = version === 2 ? 100000 : 100000;
   
-  // Derive the hash
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: iterations,
-      hash: "SHA-256"
-    },
-    baseKey,
-    256
-  );
+  const derived = await pbkdf2(password, salt, iterations, 256);
   
-  // Combine salt and hash for storage (base64)
-  const combined = new Uint8Array(salt.length + hashBuffer.byteLength);
-  combined.set(salt);
-  combined.set(new Uint8Array(hashBuffer), salt.length);
-  
-  return btoa(String.fromCharCode(...combined));
+  const combinedBytes = new Uint8Array(salt.length + derived.length);
+  combinedBytes.set(salt);
+  combinedBytes.set(derived, salt.length);
+  return btoa(String.fromCharCode(...combinedBytes));
 }
 
 export async function verifyPassword(password: string, storedHash: string, version: number = 1): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const passwordBuffer = encoder.encode(password);
-  
   // Decode the stored hash
   const combined = new Uint8Array(
     atob(storedHash)
@@ -62,28 +92,10 @@ export async function verifyPassword(password: string, storedHash: string, versi
   const salt = combined.slice(0, 16);
   const originalHash = combined.slice(16);
   
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    passwordBuffer,
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-  
   const iterations = version === 2 ? 100000 : 100000;
   
-  const testHash = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: iterations,
-      hash: "SHA-256"
-    },
-    baseKey,
-    256
-  );
+  const testHashArray = await pbkdf2(password, salt, iterations, 256);
   
-  const testHashArray = new Uint8Array(testHash);
   if (testHashArray.length !== originalHash.length) return false;
   
   // Constant-time comparison
@@ -146,16 +158,35 @@ export async function hmacSha256(key: string | Uint8Array, data: string | Uint8A
 }
 
 /**
- * Hashes the client's PIN hash on the server reusing the server-side password hashing scheme (100,000 iterations).
+ * Hashes the PIN using PBKDF2 with 600,000 iterations.
+ * This is equivalent to the client-side hashPin/hashPasswordClient.
  */
-export async function hashPinServer(clientPinHash: string): Promise<string> {
-  return hashPassword(clientPinHash, 2);
+export async function hashPin(pin: string, salt: string): Promise<string> {
+  const saltBytes = new TextEncoder().encode(salt.toLowerCase());
+  const derived = await pbkdf2(pin, saltBytes, 600000, 256);
+  return Array.from(derived)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
- * Verifies the client's PIN hash against the stored server PIN hash.
+ * Hashes the session ID using PBKDF2-HMAC-SHA256 with the user ID as a fixed salt.
+ * Uses 100 iterations for deterministic hashing.
+ * Returns a 64-character hex string.
  */
-export async function verifyPinServer(clientPinHash: string, storedPinHash: string): Promise<boolean> {
-  return verifyPassword(clientPinHash, storedPinHash);
+export async function generateSessionHash(sessionId: string, userId: string): Promise<string> {
+  const salt = new TextEncoder().encode(userId);
+  return hashWithPBKDF2(sessionId, salt, 100, 256);
 }
 
+/**
+ * Hashes the client pinHash with a nonce challenge.
+ * Uses 10,000 iterations to be fully compatible with Cloudflare Workers limits.
+ */
+export async function hashChallenge(pinHash: string, nonce: string): Promise<string> {
+  const saltBytes = new TextEncoder().encode(nonce.toLowerCase());
+  const derived = await pbkdf2(pinHash, saltBytes, 10000, 256);
+  return Array.from(derived)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

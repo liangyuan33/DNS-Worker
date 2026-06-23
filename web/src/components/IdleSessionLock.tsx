@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Spinner, Card, Elevation, Callout, Intent } from "@blueprintjs/core";
 import { LogOut } from "lucide-react";
-import { hashPin } from "../utils/auth";
-import { unlockSession, lockSession, ApiError } from "../services";
+import { hashPin, hashChallenge } from "../utils/auth";
+import { unlockSession, lockSession, getUnlockNonce, ApiError } from "../services";
 import type { UserInfo } from "../services";
 import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
 import { DigitInput, type DigitInputRef } from "./DigitInput";
@@ -101,8 +101,28 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
     setLoading(true);
     setError("");
     try {
-      const pinHash = await hashPin(pinToSubmit, currentUser?.id || "");
-      await unlockSession(pinHash);
+      const userId = currentUser?.id || sessionStorage.getItem("obex_user_id");
+      if (!userId) {
+        setError(t("auth.sessionExpired", "Session expired. Logging out..."));
+        setTimeout(() => {
+          handleLogout();
+        }, 1500);
+        return;
+      }
+      // Get challenge nonce from server
+      const { nonce, legacy } = await getUnlockNonce();
+
+      // Compute pinHash = hashPin(pinToSubmit, userId)
+      const pinHash = await hashPin(pinToSubmit, userId);
+
+      if (legacy) {
+        // Legacy flow: send the raw pinHash directly (server will verify and auto-migrate)
+        await unlockSession(pinHash, nonce);
+      } else {
+        // Modern challenge-response flow
+        const challengedHash = await hashChallenge(pinHash, nonce);
+        await unlockSession(challengedHash, nonce);
+      }
       
       // Success! Unlock session
       setIsLocked(false);
@@ -171,9 +191,14 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
                 alt="Obex DNS Logo"
                 className="w-20 h-20 object-contain"
               />
-              <h3 className="font-bold tracking-tight text-2xl mt-4 text-slate-900 dark:text-slate-100">
-                {currentUser?.username || "Admin"}
-              </h3>
+              {(() => {
+                const displayUsername = currentUser?.username || sessionStorage.getItem("obex_username") || "";
+                return displayUsername ? (
+                  <h3 className="font-bold tracking-tight text-2xl mt-4 text-slate-900 dark:text-slate-100">
+                    {displayUsername}
+                  </h3>
+                ) : null;
+              })()}
               <p className="text-gray-500 mt-2 text-center text-sm leading-relaxed">
                 {t("auth.sessionLocked", "Session Locked due to inactivity")}
               </p>

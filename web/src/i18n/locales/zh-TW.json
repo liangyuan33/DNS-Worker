@@ -100,8 +100,8 @@
     "confirmPin": "確認新 PIN 碼",
     "verifyIdentity": "驗證身份",
     "usePassword": "使用密碼驗證",
-    "use2fa": "使用雙重驗證碼",
-    "totpCode": "雙重驗證碼",
+    "use2fa": "使用兩步驗證碼",
+    "totpCode": "兩步驗證碼",
     "currentPassword": "目前密碼",
     "disablePinWarning": "停用 PIN 碼將徹底關閉空閒會话鎖定功能。",
     "pinFormatTip": "PIN 碼必須為 4 位數字",
@@ -479,10 +479,14 @@
       "copied": "已複製！",
       "done": "完成，我已保存密鑰"
     },
+    "sessions": {
+      "session": "會話"
+    },
     "activity": {
       "title": "帳號活動記錄",
       "action": "事件",
       "time": "時間",
+      "session": "會話",
       "ip": "IP 位址",
       "empty": "暫無活動記錄。",
       "loadMore": "載入更多",

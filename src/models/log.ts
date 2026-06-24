@@ -80,16 +80,13 @@ export class LogModel {
     return result.meta.changes || 0;
   }
 
-  /**
-   * 全局清理过期日志 (基于各个 Profile 的 settings)
-   * 采用 Profile 逐个清理的方式，能完美利用 idx_logs_profile_time (profile_id, timestamp) 索引，避免全表扫描。
-   */
   async cleanupGlobal(): Promise<void> {
     // 获取所有 profile 以及对应的 settings
     const { results: profiles } = await this.db.prepare(
       "SELECT id, settings FROM profiles"
     ).all<{id: string, settings: string}>();
     
+    const statements = [];
     // 针对每个 profile，解析出保留天数并删除过期日志
     for (const profile of profiles) {
       let days = 30;
@@ -104,12 +101,17 @@ export class LogModel {
       
       const threshold = Math.floor(Date.now() / 1000 - (days * 24 * 3600));
       
-      // 此查询完美利用了 (profile_id, timestamp) 联合索引，执行效率极高
-      await this.db.prepare(
-        "DELETE FROM logs WHERE profile_id = ? AND timestamp < ?"
-      )
-        .bind(profile.id, threshold)
-        .run();
+      // 利用 (profile_id, timestamp) 联合索引，将语句添加到批量执行队列中
+      statements.push(
+        this.db.prepare(
+          "DELETE FROM logs WHERE profile_id = ? AND timestamp < ?"
+        )
+          .bind(profile.id, threshold)
+      );
+    }
+
+    if (statements.length > 0) {
+      await this.db.batch(statements);
     }
   }
 

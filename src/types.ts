@@ -20,6 +20,8 @@ export interface Env {
   THROTTLE_ACTIVE_SEC?: string | number;
   SYNC_PROFILE_INTERVAL_SEC?: string | number;
   TURNSTILE_SECRET_KEY?: string;
+  MAX_SYNC_DOMAINS?: string | number;
+  MAX_LIST_DOMAINS?: string | number;
   [key: string]: any;
 }
 

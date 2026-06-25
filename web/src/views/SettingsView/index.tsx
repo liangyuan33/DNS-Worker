@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Spinner, Intent } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 
@@ -23,6 +23,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { t } = useTranslation();
+
+  const isInitialLoad = useRef(true);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState("");
@@ -51,6 +54,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
     };
     fetchProfile();
   }, [profileId]);
+
+  useEffect(() => {
+    if (!loading && settings) {
+      const timer = setTimeout(() => {
+        isInitialLoad.current = false;
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, settings]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, []);
 
   const updateProfileName = async () => {
     if (!editName || editName === profile?.name) {
@@ -81,16 +99,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
     }
   };
 
-  const saveSettings = async () => {
-    if (!settings) return;
+  const saveSettings = useCallback(async (settingsToSave: ProfileSettings) => {
+    if (!settingsToSave) return;
     setSaving(true);
     try {
-      await updateProfileSettings(profileId, settings as any);
-      toasterRef?.current?.show({
-        message: t("settings.saveSuccess"),
-        intent: Intent.SUCCESS,
-        icon: "tick",
-      });
+      await updateProfileSettings(profileId, settingsToSave as any);
     } catch (e) {
       console.error(e);
       toasterRef?.current?.show({
@@ -101,9 +114,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
     } finally {
       setSaving(false);
     }
-  };
+  }, [profileId, toasterRef, t]);
 
+  const debouncedSave = useCallback(
+    (newSettings: ProfileSettings) => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      debounceTimer.current = setTimeout(() => {
+        saveSettings(newSettings);
+      }, 600);
+    },
+    [saveSettings],
+  );
 
+  const handleSettingsChange = useCallback(
+    (newSettings: ProfileSettings) => {
+      setSettings(newSettings);
+      if (!isInitialLoad.current) {
+        debouncedSave(newSettings);
+      }
+    },
+    [debouncedSave],
+  );
 
   const handleDnsTest = async () => {
     if (!testInput.domain) return;
@@ -176,15 +207,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
         setEditName={setEditName}
         updateProfileName={updateProfileName}
         exportProfile={exportProfile}
-        saveSettings={saveSettings}
         saving={saving}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <UpstreamCard settings={settings} setSettings={setSettings} />
-        <DefaultPolicyCard settings={settings} setSettings={setSettings} />
-        <LogRetentionCard settings={settings} setSettings={setSettings} />
-        <AdvancedEcsCard settings={settings} setSettings={setSettings} />
+        <UpstreamCard settings={settings} setSettings={handleSettingsChange} />
+        <DefaultPolicyCard settings={settings} setSettings={handleSettingsChange} />
+        <LogRetentionCard settings={settings} setSettings={handleSettingsChange} />
+        <AdvancedEcsCard settings={settings} setSettings={handleSettingsChange} />
       </div>
 
       <DnsTestCard

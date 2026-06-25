@@ -109,10 +109,20 @@ export async function handleProfilesCoreRequest(
     
     if (newSettings.upstream && Array.isArray(newSettings.upstream)) {
       for (const url of newSettings.upstream) {
-        if (!url.startsWith('https://') && !url.startsWith('http://') && !url.startsWith('tcp://')) {
-          return new Response("Invalid upstream URL format. Only HTTP(S) and TCP are allowed.", { status: 400 });
+        // 允许三种格式：https://...、http://...、tcp://...、裸 IP（8.8.8.8）或 IP:port（8.8.8.8:5353）
+        // resolver.ts 中裸 IP 已被视为经典 TCP DNS，API 验证层对齐此行为。
+        const isHttps = url.startsWith('https://');
+        const isHttp  = url.startsWith('http://');
+        const isTcp   = url.startsWith('tcp://');
+        // 裸 host[:port]：不含 / 且不含 scheme
+        const isBareHost = !url.includes('//') && !url.startsWith('/');
+
+        if (!isHttps && !isHttp && !isTcp && !isBareHost) {
+          return new Response("Invalid upstream URL format. Only HTTP(S), TCP, or bare host[:port] are allowed.", { status: 400 });
         }
-        if (!isSafeUrl(url)) {
+        // 统一规范化后做安全检查（防 SSRF）
+        const normalized = isBareHost ? `tcp://${url}` : url;
+        if (!isSafeUrl(normalized)) {
           return new Response("Invalid upstream URL. Private networks and localhosts are not allowed.", { status: 400 });
         }
       }

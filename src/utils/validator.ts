@@ -59,8 +59,19 @@ const FORBIDDEN_HOSTNAMES = [
  */
 export function isSafeUrl(urlString: string): boolean {
   try {
-    // Allows parsing tcp:// by temporarily pretending it's http:// for URL parser
-    const parseableUrl = urlString.startsWith('tcp://') ? urlString.replace('tcp://', 'http://') : urlString;
+    // \u5bf9\u88f8 host[:port] \u683c\u5f0f\uff08\u5982 "8.8.8.8"\u3001"8.8.8.8:5353"\u3001"[2001:db8::1]:53"\uff09
+    // \u7edf\u4e00\u5168\u90e8\u89c4\u8303\u5316\u4e3a tcp:// \u518d\u7531 URL \u89e3\u6790\u5668\u5904\u7406\uff0c\u907f\u514d\u6279\u5904\u7406\u4e24\u5957\u903b\u8f91
+    let parseableUrl: string;
+    if (urlString.startsWith('tcp://')) {
+      parseableUrl = urlString.replace('tcp://', 'http://');
+    } else if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+      parseableUrl = urlString;
+    } else {
+      // \u88f8 host \u6216 host:port\uff08\u4e0d\u542b scheme \u4e14\u4e0d\u542b /\uff09
+      // IPv6 \u88f8\u5730\u5740\u9700\u8981\u62ec\u53f7\u624d\u80fd\u88ab URL \u6b63\u786e\u89e3\u6790\uff0c\u4f46\u7528\u6237\u53ef\u80fd\u8f93\u5165\u4e0d\u5e26\u62ec\u53f7\u7684\u5f62\u5f0f
+      parseableUrl = `http://${urlString}`;
+    }
+
     const url = new URL(parseableUrl);
 
     if (FORBIDDEN_HOSTNAMES.includes(url.hostname.toLowerCase())) {
@@ -82,6 +93,7 @@ export function isSafeUrl(urlString: string): boolean {
     return false; // Invalid URL
   }
 }
+
 
 export function isIPv4(ip: string): boolean {
   return ipv4ToNumeric(ip) !== null;

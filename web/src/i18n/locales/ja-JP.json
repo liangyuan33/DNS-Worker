@@ -365,6 +365,7 @@
     "retentionDuration": "保存期间",
     "retentionDesc": "保存期間を過ぎた古いログはデータベースから自動的に消去されます。",
     "ecsTitle": "EDNS Client Subnet (ECS)",
+    "ecsUpstreamHint": "上流サーバーに送信される ECS サブネット",
     "sendEcs": "ECS を送信する",
     "customSubnet": "カスタムサブネット",
     "customIpv4": "カスタム IPv4 サブネット",
@@ -408,7 +409,8 @@
     "export": "設定をエクスポート",
     "exportSuccess": "設定をエクスポートしました",
     "exportError": "設定のエクスポートに失敗しました。しばらくしてからもう一度お試しください",
-    "nameUpdateSuccess": "設定名を更新しました"
+    "nameUpdateSuccess": "設定名を更新しました",
+    "saving": "保存中..."
   },
   "account": {
     "title": "アカウント設定",

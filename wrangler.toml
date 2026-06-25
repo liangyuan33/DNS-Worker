@@ -126,20 +126,16 @@ PRESET_UPSTREAMS = """
     "url": "https://family.adguard-dns.com/dns-query"
   },
   {
-    "label": "Cloudflare (1.1.1.1)",
-    "url": "1.1.1.1"
-  },
-  {
     "label": "Cloudflare Security (1.1.1.2)",
-    "url": "1.1.1.2"
+    "url": "tcp://1.1.1.2:53"
   },
   {
-    "label": "Quad9 (9.9.9.9)",
-    "url": "9.9.9.9:9953"
+    "label": "Quad9 ECS (9.9.9.11)",
+    "url": "tcp://9.9.9.11:9953"
   },
   {
     "label": "Google (8.8.8.8)",
-    "url": "8.8.8.8"
+    "url": "tcp://8.8.8.8:53"
   }
 ]
 """

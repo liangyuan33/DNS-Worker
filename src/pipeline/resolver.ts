@@ -1,7 +1,7 @@
 import { Context, DNSQuery, ResolutionResult, ProfileSettings } from "../types";
 import { LogModel } from "../models/log";
 import { fetchGeoIP } from "../utils/geoip";
-import { buildResponse, buildResponseMulti, buildDNSQuery, parseDNSAnswer, DNSRecord } from "../utils/dns";
+import { buildResponse, buildResponseMulti, buildDNSQuery, parseDNSAnswer, injectEcsIntoQuery, DNSRecord } from "../utils/dns";
 import { dnsCache } from "./cache";
 import { connect } from 'cloudflare:sockets';
 import { isSafeUrl } from "../utils/validator";
@@ -22,35 +22,49 @@ export const pipelineResolver = {
     let upstreamLatency = 0;
     let isClassicDns = !upstreamUrl.startsWith('http');
 
-    // 处理 ECS
-    let ecs: string | undefined = "";
+    // ── ECS 处理 ──────────────────────────────────────────────────────────
+    // ECS 通过 RFC 7871 OPT RR 直接写入 DNS 线格式（wire format），而非 URL 参数。
+    // URL 参数方式（edns_client_subnet=...）是 Google DoH 私有扩展，
+    // ControlD、NextDNS 等主流上游均不支持，只能识别 wire format 中的 OPT 记录。
+    let ecs: string | undefined;
+    let queryRaw = query.raw; // 可能被 ECS 注入后替换
     if (settings.ecs?.enabled) {
       const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
-      ecs = settings.ecs.use_client_ip 
-        ? `${clientIp}/${clientIp.includes(':') ? 48 : 24}` 
-        : (query.type === 'AAAA' ? (settings.ecs.ipv6_cidr || settings.ecs.ipv4_cidr) : (settings.ecs.ipv4_cidr || settings.ecs.ipv6_cidr));
+      ecs = settings.ecs.use_client_ip
+        ? `${clientIp}/${clientIp.includes(':') ? 48 : 24}`
+        : (query.type === 'AAAA'
+            ? (settings.ecs.ipv6_cidr || settings.ecs.ipv4_cidr)
+            : (settings.ecs.ipv4_cidr || settings.ecs.ipv6_cidr));
+      if (ecs) {
+        // 将 ECS OPT RR 注入到 DNS 查询的 wire format 中
+        queryRaw = injectEcsIntoQuery(query.raw, ecs);
+      }
     }
 
     try {
+      // \u89e3\u6790\u7ecf\u5178 DNS \u7684 host \u548c port\uff0c\u63d0\u5347\u5230\u5916\u5c42\u4f9b diagnostics \u4f7f\u7528
+      let tcpHost = '';
+      let tcpPort = 53;
+
       if (isClassicDns) {
         // 经典 DNS 处理 (通过 TCP Socket)
-        let host = upstreamUrl.replace('tcp://', '');
-        let port = 53;
-        if (host.includes(':')) {
-          const parts = host.split(':');
-          host = parts[0];
-          port = parseInt(parts[1]) || 53;
+        // 去除 tcp:// 前缀和裸 IP 均可正确解析
+        tcpHost = upstreamUrl.replace(/^tcp:\/\//, '');
+        if (tcpHost.includes(':')) {
+          const parts = tcpHost.split(':');
+          tcpHost = parts[0];
+          tcpPort = parseInt(parts[1]) || 53;
         }
 
-        const socket = connect({ hostname: host, port: port });
+        const socket = connect({ hostname: tcpHost, port: tcpPort });
         const writer = socket.writable.getWriter();
         const reader = socket.readable.getReader();
 
-        // TCP DNS 需要 2 字节长度前缀 (RFC 1035)
-        const tcpQuery = new Uint8Array(query.raw.length + 2);
-        tcpQuery[0] = (query.raw.length >> 8) & 0xff;
-        tcpQuery[1] = query.raw.length & 0xff;
-        tcpQuery.set(query.raw, 2);
+        // TCP DNS：同样使用注入 ECS 后的 queryRaw
+        const tcpQuery = new Uint8Array(queryRaw.length + 2);
+        tcpQuery[0] = (queryRaw.length >> 8) & 0xff;
+        tcpQuery[1] = queryRaw.length & 0xff;
+        tcpQuery.set(queryRaw, 2);
 
         await writer.write(tcpQuery);
         writer.releaseLock();
@@ -72,15 +86,8 @@ export const pipelineResolver = {
         await socket.close();
         upstreamLatency = Date.now() - startFetch;
       } else {
-        // DoH 处理
-        let finalUrl = upstreamUrl;
-        if (ecs) {
-          const targetUrl = new URL(upstreamUrl);
-          targetUrl.searchParams.set('edns_client_subnet', ecs);
-          finalUrl = targetUrl.toString();
-        }
-
-        const response = await fetch(finalUrl, {
+        // DoH 处理：ECS 已注入 queryRaw（wire format），无需 URL 参数
+        const response = await fetch(upstreamUrl, {
           method: "POST",
           headers: { 
             "Accept": "application/dns-message",
@@ -88,7 +95,7 @@ export const pipelineResolver = {
             "User-Agent": "Obex-DNS/1.0",
             "Connection": "keep-alive"
           },
-          body: query.raw,
+          body: queryRaw,
           signal: AbortSignal.timeout(5000)
         });
 
@@ -143,7 +150,7 @@ export const pipelineResolver = {
         latency: Date.now() - context.startTime, 
         timings: { upstream_fetch: upstreamLatency },
         diagnostics: {
-          upstream_url: isClassicDns ? `tcp://${upstreamUrl}` : upstreamUrl,
+          upstream_url: isClassicDns ? `tcp://${tcpHost}:${tcpPort}` : upstreamUrl,
           method: isClassicDns ? "TCP" : "GET",
           status: 200
         }

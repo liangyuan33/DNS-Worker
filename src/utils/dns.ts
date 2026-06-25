@@ -11,4 +11,5 @@ export {
   buildResponseMulti
 } from "./dns/encoder";
 export { encodeRData } from "./dns/rdata";
+export { injectEcsIntoQuery } from "./dns/injectEcs";
 export type { DNSRecord } from "./dns/encoder";

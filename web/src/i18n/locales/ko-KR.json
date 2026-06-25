@@ -365,6 +365,7 @@
     "retentionDuration": "보존 기간",
     "retentionDesc": "만료된 로그는 데이터베이스에서 자동으로 지워집니다.",
     "ecsTitle": "EDNS Client Subnet (ECS)",
+    "ecsUpstreamHint": "상류 서버로 전송되는 ECS 서브넷",
     "sendEcs": "ECS 제공",
     "customSubnet": "사용자 지정 서브넷",
     "customIpv4": "사용자 지정 IPv4 서브넷",
@@ -408,7 +409,8 @@
     "export": "설정 내보내기",
     "exportSuccess": "설정을 성공적으로 내보냈습니다",
     "exportError": "설정 내보내기 실패, 나중에 다시 시도하세요",
-    "nameUpdateSuccess": "설정 이름이 업데이트되었습니다"
+    "nameUpdateSuccess": "설정 이름이 업데이트되었습니다",
+    "saving": "저장 중..."
   },
   "account": {
     "title": "계정 설정",

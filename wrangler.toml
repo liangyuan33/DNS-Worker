@@ -181,6 +181,8 @@ MAX_LIST_DOMAINS=150000
 # Prevents high-retention profiles (e.g. 360 days) from filling up D1's 500 MB limit.
 MAX_LOG_RETENTION_DAYS=90
 
+NORMAL_USER_MAX_LOG_RETENTION_DAYS=7
+
 # Hard cap on log row count per profile. Acts as a circuit-breaker when write
 # rate temporarily exceeds cleanup rate (e.g. high-traffic profiles).
 MAX_LOGS_PER_PROFILE=500000

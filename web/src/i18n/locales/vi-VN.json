@@ -396,7 +396,7 @@
     "retention1h": "1 giờ",
     "retention24h": "24 giờ",
     "retention7d": "7 ngày",
-    "retention30d": "30 ngày (Mặc định)",
+    "retention30d": "30 ngày",
     "retention90d": "90 ngày (Tối đa)",
     "blockModeTitle": "Chế độ phản hồi khi chặn",
     "blockModeDesc": "Nội dung trả về khi tên miền bị chặn",

@@ -396,7 +396,7 @@
     "retention1h": "1 час",
     "retention24h": "24 часа",
     "retention7d": "7 дней",
-    "retention30d": "30 дней (по умолч.)",
+    "retention30d": "30 дней",
     "retention90d": "90 дней (Максимум)",
     "blockModeTitle": "Режим ответа при блокировке",
     "blockModeDesc": "Что возвращать при блокировке",

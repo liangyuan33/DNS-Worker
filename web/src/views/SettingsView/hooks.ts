@@ -22,17 +22,19 @@ export const usePresetUpstreams = () => {
   return presets;
 };
 
-export const useLogRetentionOptions = () => {
+export const useLogRetentionOptions = (isAdmin: boolean) => {
   const { t } = useTranslation();
-  return useMemo(
-    () => [
+  return useMemo(() => {
+    const allOptions = [
       { label: t("settings.retention10m"), value: 0.007 },
       { label: t("settings.retention1h"), value: 0.0416 },
       { label: t("settings.retention24h"), value: 1 },
       { label: t("settings.retention7d"), value: 7 },
       { label: t("settings.retention30d"), value: 30 },
       { label: t("settings.retention90d"), value: 90 },
-    ],
-    [t]
-  );
+    ];
+    if (isAdmin) return allOptions;
+    // 对于非管理员用户，限制最大可选值为 7 天
+    return allOptions.filter((opt) => opt.value <= 7);
+  }, [t, isAdmin]);
 };

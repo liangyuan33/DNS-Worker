@@ -397,7 +397,7 @@
     "retention1h": "1 Hour",
     "retention24h": "24 Hours",
     "retention7d": "7 Days",
-    "retention30d": "30 Days (Default)",
+    "retention30d": "30 Days",
     "retention90d": "90 Days (Maximum)",
     "blockModeTitle": "Block Response Mode",
     "blockModeDesc": "Response content when a domain is blocked",

@@ -396,7 +396,7 @@
     "retention1h": "1時間",
     "retention24h": "24時間",
     "retention7d": "7日間",
-    "retention30d": "30日間 (デフォルト)",
+    "retention30d": "30日間",
     "retention90d": "90日（最大）",
     "blockModeTitle": "ブロック応答モード",
     "blockModeDesc": "ドメインがブロックされた際に返される応答内容",

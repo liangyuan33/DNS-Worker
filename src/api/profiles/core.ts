@@ -106,6 +106,10 @@ export async function handleProfilesCoreRequest(
   // PATCH /api/profiles/:id/settings
   if (pathParts[3] === 'settings' && request.method === 'PATCH') {
     const newSettings = await request.json() as ProfileSettings;
+
+    if (user?.role !== 'admin' && newSettings.log_retention_days != null) {
+      newSettings.log_retention_days = Math.min(newSettings.log_retention_days, env.NORMAL_USER_MAX_LOG_RETENTION_DAYS || 7);
+    }
     
     if (newSettings.upstream && Array.isArray(newSettings.upstream)) {
       for (const url of newSettings.upstream) {

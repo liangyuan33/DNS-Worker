@@ -396,7 +396,7 @@
     "retention1h": "1시간",
     "retention24h": "24시간",
     "retention7d": "7일",
-    "retention30d": "30일 (기본값)",
+    "retention30d": "30일",
     "retention90d": "90일(최대)",
     "blockModeTitle": "차단 응답 모드",
     "blockModeDesc": "도메인이 차단되었을 때 반환되는 내용",

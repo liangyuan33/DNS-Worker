@@ -150,6 +150,7 @@ function App() {
                   setPrefilledRule={setPrefilledRule}
                   handleQuickAction={handleQuickAction}
                   toasterRef={toasterRef}
+                  currentUser={currentUser}
                 />
               </MainLayout>
             }

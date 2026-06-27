@@ -103,7 +103,7 @@ function App() {
       </Helmet>
       <GitHubCorner />
       <OverlayToaster position="bottom" ref={toasterRef} />
-      <IdleSessionLock currentUser={currentUser} handleLogout={handleLogout}>
+      <IdleSessionLock currentUser={currentUser} handleLogout={handleLogout} onUnlock={fetchProfiles}>
         <Routes>
           <Route path="/" element={<Navigate to="/dash" replace />} />
           <Route

@@ -22,7 +22,7 @@ export const usePresetUpstreams = () => {
   return presets;
 };
 
-export const useLogRetentionOptions = (isAdmin: boolean) => {
+export const useLogRetentionOptions = (isAdmin: boolean, maxRetentionDays: number) => {
   const { t } = useTranslation();
   return useMemo(() => {
     const allOptions = [
@@ -34,7 +34,6 @@ export const useLogRetentionOptions = (isAdmin: boolean) => {
       { label: t("settings.retention90d"), value: 90 },
     ];
     if (isAdmin) return allOptions;
-    // 对于非管理员用户，限制最大可选值为 7 天
-    return allOptions.filter((opt) => opt.value <= 7);
-  }, [t, isAdmin]);
+    return allOptions.filter((opt) => opt.value <= maxRetentionDays);
+  }, [t, isAdmin, maxRetentionDays]);
 };

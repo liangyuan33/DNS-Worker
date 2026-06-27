@@ -9,11 +9,12 @@ export interface LogRetentionCardProps {
   settings: ProfileSettings;
   setSettings: (settings: ProfileSettings) => void;
   isAdmin: boolean;
+  maxRetentionDays: number;
 }
 
-export const LogRetentionCard: React.FC<LogRetentionCardProps> = ({ settings, setSettings, isAdmin }) => {
+export const LogRetentionCard: React.FC<LogRetentionCardProps> = ({ settings, setSettings, isAdmin, maxRetentionDays }) => {
   const { t } = useTranslation();
-  const LOG_RETENTION_OPTIONS = useLogRetentionOptions(isAdmin);
+  const LOG_RETENTION_OPTIONS = useLogRetentionOptions(isAdmin, maxRetentionDays);
 
   return (
     <Card elevation={Elevation.ONE} className="dark:bg-gray-900 dark:border-gray-800">

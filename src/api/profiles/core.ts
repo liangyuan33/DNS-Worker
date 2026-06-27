@@ -109,7 +109,7 @@ export async function handleProfilesCoreRequest(
     
     // Enforce log retention limit for non-admin users
     if (user?.role !== 'admin' && newSettings.log_retention_days != null) {
-      newSettings.log_retention_days = Math.min(newSettings.log_retention_days, env.NORMAL_USER_MAX_LOG_RETENTION_DAYS || 7);
+      newSettings.log_retention_days = Math.min(newSettings.log_retention_days, Number(env.NORMAL_USER_MAX_LOG_RETENTION_DAYS) || 7);
     }
     
     if (newSettings.upstream && Array.isArray(newSettings.upstream)) {

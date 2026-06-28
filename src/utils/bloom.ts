@@ -3,8 +3,13 @@
  * 
  * 针对 P = 10^-6 精度场景进行高度优化。
  * 在该精度下，对于每个元素，k ≈ 20 (哈希函数数量)。
- * 优化重点：使用 32位位数组 (Uint32Array) 代替 8位 (Uint8Array)，
- * 减少 4 倍的合并 (merge) 循环开销，以及加速位偏移计算。
+ * 优化重点：
+ *   1. 使用 32位位数组 (Uint32Array) 代替 8位 (Uint8Array)，
+ *      减少 4 倍的合并 (merge) 循环开销，以及加速位偏移计算。
+ *   2. 利用 Kirsch-Mitzenmacher 优化，不再独立计算两个 FNV-1a，
+ *      而是计算单个 FNV-1a 后，使用 MurmurHash3 的 fmix32 finalizer
+ *      在 O(1) 复杂度内派生 h2。使域名遍历字符的循环开销直接减半！
+ *   3. 缓存局部变量，使得 V8 编译器可以最大化做向量化 (SIMD) 优化。
  */
 export class BloomFilter {
   private readonly size: number;
@@ -13,7 +18,6 @@ export class BloomFilter {
 
   private static readonly FNV_PRIME = 16777619;
   private static readonly FNV_SEED_0 = 2166136261;
-  private static readonly FNV_SEED_1 = 3074159265;
   
   // 预分配 TextEncoder 以避免重复创建开销 (Isolate 全局)
   private static readonly encoder = new TextEncoder();
@@ -55,23 +59,29 @@ export class BloomFilter {
    */
   add(element: string): void {
     let h1 = BloomFilter.FNV_SEED_0;
-    let h2 = BloomFilter.FNV_SEED_1;
     const len = element.length;
     for (let i = 0; i < len; i++) {
-      const char = element.charCodeAt(i) & 0xff;
-      h1 ^= char;
+      h1 ^= element.charCodeAt(i) & 0xff;
       h1 = Math.imul(h1, BloomFilter.FNV_PRIME);
-      h2 ^= char;
-      h2 = Math.imul(h2, BloomFilter.FNV_PRIME);
     }
     h1 = h1 >>> 0;
-    h2 = h2 >>> 0;
+    
+    // 用 MurmurHash3 fmix32 混淆算法根据 h1 快速派生 h2，减少一半的字符遍历和乘法开销
+    let h2 = h1 ^ (h1 >>> 16);
+    h2 = Math.imul(h2, 0x85ebca6b);
+    h2 = h2 ^ (h2 >>> 13);
+    h2 = Math.imul(h2, 0xc2b2ae35);
+    h2 = (h2 ^ (h2 >>> 16)) >>> 0;
 
-    for (let i = 0; i < this.hashes; i++) {
+    const arr = this.bitArray;
+    const size = this.size;
+    const k = this.hashes;
+
+    for (let i = 0; i < k; i++) {
       // Double Hashing: (h1 + i * h2) % m
-      const pos = (h1 + i * h2) % this.size;
+      const pos = (h1 + i * h2) % size;
       // 32位数组优化: index / 32 => pos >>> 5, index % 32 => pos & 31
-      this.bitArray[pos >>> 5] |= (1 << (pos & 31));
+      arr[pos >>> 5] |= (1 << (pos & 31));
     }
   }
 
@@ -81,21 +91,27 @@ export class BloomFilter {
    */
   test(element: string): boolean {
     let h1 = BloomFilter.FNV_SEED_0;
-    let h2 = BloomFilter.FNV_SEED_1;
     const len = element.length;
     for (let i = 0; i < len; i++) {
-      const char = element.charCodeAt(i) & 0xff;
-      h1 ^= char;
+      h1 ^= element.charCodeAt(i) & 0xff;
       h1 = Math.imul(h1, BloomFilter.FNV_PRIME);
-      h2 ^= char;
-      h2 = Math.imul(h2, BloomFilter.FNV_PRIME);
     }
     h1 = h1 >>> 0;
-    h2 = h2 >>> 0;
+    
+    // 同理，在 O(1) 复杂度内派生 h2
+    let h2 = h1 ^ (h1 >>> 16);
+    h2 = Math.imul(h2, 0x85ebca6b);
+    h2 = h2 ^ (h2 >>> 13);
+    h2 = Math.imul(h2, 0xc2b2ae35);
+    h2 = (h2 ^ (h2 >>> 16)) >>> 0;
 
-    for (let i = 0; i < this.hashes; i++) {
-      const pos = (h1 + i * h2) % this.size;
-      if ((this.bitArray[pos >>> 5] & (1 << (pos & 31))) === 0) {
+    const arr = this.bitArray;
+    const size = this.size;
+    const k = this.hashes;
+
+    for (let i = 0; i < k; i++) {
+      const pos = (h1 + i * h2) % size;
+      if ((arr[pos >>> 5] & (1 << (pos & 31))) === 0) {
         return false;
       }
     }
@@ -143,15 +159,17 @@ export class BloomFilter {
 
   /**
    * 合并另一个布隆过滤器 (按位或运算)
-   * 由于 bitArray 采用了 Uint32Array，此处的循环开销减少了 4 倍！
+   * 局部变量缓存以帮助 V8 引擎进行自动循环向量化 (SIMD) 优化
    */
   merge(other: BloomFilter): void {
     if (this.size !== other.size || this.hashes !== other.hashes) {
       throw new Error("Cannot merge bloom filters with different sizes or hash counts.");
     }
-    const len = this.bitArray.length;
+    const a = this.bitArray;
+    const b = other.bitArray;
+    const len = a.length;
     for (let i = 0; i < len; i++) {
-      this.bitArray[i] |= other.bitArray[i];
+      a[i] |= b[i];
     }
   }
 

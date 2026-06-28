@@ -213,3 +213,96 @@ export async function syncNextListForProfile(
     await profileModel.updateListUpdatedAt(profileId, now);
   }
 }
+
+/**
+ * 【手动/全量同步专用】同步该 Profile 下的所有已启用订阅列表。
+ *
+ * 用于用户在后台点击“同步所有列表”等手动触发操作。
+ * 在单个任务中，按顺序依次同步所有已启用列表，避免 incremental-sync 等待分钟级 Cron。
+ */
+export async function syncAllListsForProfile(
+  profileId: string,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<void> {
+  const profileModel = new ProfileModel(env.DB);
+  const listModel = new ListModel(env.DB);
+  const profileBloomModel = new ProfileBloomModel(env.DB);
+  const listBloomModel = new ListBloomModel(env.DB);
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    const profile = await profileModel.getById(profileId);
+    if (!profile) {
+      console.error(`[Sync] Profile ${profileId} not found.`);
+      return;
+    }
+
+    const lists = await listModel.getLists(profileId);
+    const activeLists = lists.filter((l) => !!l.enabled);
+
+    if (activeLists.length === 0) {
+      await profileBloomModel.clearProfileBlooms(profileId);
+      await profileModel.updateListUpdatedAt(profileId, now);
+      return;
+    }
+
+    const maxListDomains = Number(env.MAX_LIST_DOMAINS) || 150000;
+    const maxDomains = Number(env.MAX_SYNC_DOMAINS) || 1000000;
+    const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
+    const timeoutMs = Number(env.SYNC_TIMEOUT_MS) || 30000;
+
+    for (const list of activeLists) {
+      const { domains, error: fetchError } = await fetchListContent(
+        list.url,
+        MAX_LIST_BYTES,
+        timeoutMs
+      );
+
+      let syncError: string | null = fetchError;
+
+      if (!fetchError) {
+        const listBloom = BloomFilter.create(maxDomains, falsePositiveRate);
+        const limit = Math.min(domains.length, maxListDomains);
+        if (domains.length > maxListDomains) {
+          console.warn(
+            `[Sync] Domain list truncated to ${maxListDomains} (was ${domains.length}).`
+          );
+        }
+
+        for (let i = 0; i < limit; i++) {
+          listBloom.add(domains[i]);
+        }
+
+        await listBloomModel.upsertListBloom(list.id, listBloom.toUint8Array().buffer as ArrayBuffer, now);
+        console.log(
+          `[Sync] Profile ${profileId} (Manual): successfully updated list #${list.id} with ${limit} domains.`
+        );
+      } else {
+        console.warn(
+          `[Sync] Profile ${profileId} (Manual): failed to fetch list #${list.id}. ` +
+            `Skipping and keeping old bloom. Error: ${fetchError}`
+        );
+      }
+
+      await listModel.updateListSyncStatus(list.id, now, 1, syncError);
+    }
+
+    // 全部同步完毕后，执行合并和晋升操作
+    await combineAndPromote(
+      profileId,
+      listBloomModel,
+      profileBloomModel,
+      profileModel,
+      ctx,
+      now,
+      maxDomains,
+      falsePositiveRate
+    );
+    console.log(`[Sync] Profile ${profileId}: manual sync cycle complete.`);
+  } catch (e) {
+    console.error(`[Sync] Critical failure in manual sync for Profile ${profileId}:`, e);
+    // 防止单点故障永久阻塞
+    await profileModel.updateListUpdatedAt(profileId, now);
+  }
+}

@@ -152,21 +152,21 @@ export async function syncNextListForProfile(
     if (!fetchError) {
       // 创建对应此列表的独立布隆过滤器
       const listBloom = BloomFilter.create(maxDomains, falsePositiveRate);
-      const effectiveDomains =
-        domains.length > maxListDomains ? domains.slice(0, maxListDomains) : domains;
-
-      if (effectiveDomains.length < domains.length) {
+      const limit = Math.min(domains.length, maxListDomains);
+      if (domains.length > maxListDomains) {
         console.warn(
           `[Sync] Domain list truncated to ${maxListDomains} (was ${domains.length}).`
         );
       }
 
-      effectiveDomains.forEach((d) => listBloom.add(d));
+      for (let i = 0; i < limit; i++) {
+        listBloom.add(domains[i]);
+      }
 
       // 写入列表级布隆过滤器到数据库
       await listBloomModel.upsertListBloom(list.id, listBloom.toUint8Array().buffer as ArrayBuffer, now);
       console.log(
-        `[Sync] Profile ${profileId}: successfully updated list #${list.id} with ${effectiveDomains.length} domains.`
+        `[Sync] Profile ${profileId}: successfully updated list #${list.id} with ${limit} domains.`
       );
     } else {
       // 拉取失败：跳过，并沿用原有列表缓存，记录错误原因，保持启用状态

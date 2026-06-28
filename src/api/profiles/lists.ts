@@ -1,7 +1,7 @@
 import { Env, User, ExecutionContext } from "../../types";
 import { ListModel } from "../../models/list";
 import { ProfileModel } from "../../models/profile";
-import { syncNextListForProfile } from "../../utils/sync";
+import { syncNextListForProfile, syncAllListsForProfile } from "../../utils/sync";
 import { isSafeUrl } from "../../utils/validator";
 import { pipeline } from "../../pipeline";
 
@@ -26,12 +26,8 @@ export async function handleProfileListsRequest(
 
   if (request.method === 'POST') {
     if (pathParts[4] === 'sync') {
-      // 重置同步状态，使得 Cron 或者是接下来的异步任务可以逐个处理列表
-      await listModel.resetListSyncStatus(profileId);
-      await profileModel.updateListUpdatedAt(profileId, 0);
-      
-      // 触发首个列表的同步
-      ctx.waitUntil(syncNextListForProfile(profileId, env, ctx));
+      // 触发所有列表的同步
+      ctx.waitUntil(syncAllListsForProfile(profileId, env, ctx));
       return new Response(JSON.stringify({ message: "Sync started" }), { status: 202 });
     }
 

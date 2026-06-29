@@ -28,14 +28,14 @@ export async function syncSingleList(
     timeoutMs
   );
 
-  const maxListDomains = Number(env.MAX_LIST_DOMAINS) || 150000;
+  const maxListDomains = Number(env.MAX_LIST_DOMAINS) || 500000;
   const maxDomains = Number(env.MAX_SYNC_DOMAINS) || 1000000;
   const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
 
   let syncError: string | null = fetchError;
 
   if (!fetchError) {
-    // 构建单列表级布隆过滤器
+    // 创建全局主布隆过滤器
     const listBloom = BloomFilter.create(maxDomains, falsePositiveRate);
     const limit = Math.min(domains.length, maxListDomains);
     if (domains.length > maxListDomains) {
@@ -44,8 +44,22 @@ export async function syncSingleList(
       );
     }
 
-    for (let i = 0; i < limit; i++) {
-      listBloom.add(domains[i]);
+    // 分块编译：每 100k 个域名为一个分块编译结果，然后合并（OR）到主过滤器中
+    const chunkSize = 100000;
+    for (let offset = 0; offset < limit; offset += chunkSize) {
+      const chunkEnd = Math.min(offset + chunkSize, limit);
+      // 创建相当长度/规格的临时布隆块
+      const chunkBloom = BloomFilter.create(maxDomains, falsePositiveRate);
+      
+      for (let i = offset; i < chunkEnd; i++) {
+        chunkBloom.add(domains[i]);
+      }
+      
+      // 合众为一 (bitwise OR)
+      listBloom.merge(chunkBloom);
+      
+      // 让出事件循环，释放 CPU 执行时间并给 GC 喘息机会
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     // 保存列表布隆过滤器至 D1

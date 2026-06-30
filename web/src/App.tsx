@@ -1,4 +1,4 @@
-import { useState, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { Spinner, OverlayToaster } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
@@ -15,6 +15,8 @@ import { usePageMeta } from "./hooks/usePageMeta";
 import { useAuth } from "./hooks/useAuth";
 import { useProfiles } from "./hooks/useProfiles";
 import { IdleSessionLock } from "./components/IdleSessionLock";
+import { DeploymentGuideView } from "./views/DeploymentGuideView";
+import { loadLocale } from "./i18n/config";
 
 const AuthView = lazyWithPreload(() =>
   import("./components/AuthView").then((m) => ({ default: m.AuthView })),
@@ -57,6 +59,29 @@ function App() {
     handleDeleteProfile,
     handleQuickAction,
   } = useProfiles(isLoggedIn);
+
+  const [localeReady, setLocaleReady] = useState(false);
+
+  useEffect(() => {
+    loadLocale(i18n.language).finally(() => {
+      setLocaleReady(true);
+    });
+  }, [i18n.language]);
+
+  if (!localeReady) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Spinner size={50} />
+      </div>
+    );
+  }
+
+  // Check for configuration errors (missing DB or JWT_SECRET)
+  const isDbMissing = (window as any).OBEX_CONFIG?.isDbMissing;
+  const isJwtSecretMissing = (window as any).OBEX_CONFIG?.isJwtSecretMissing;
+  if (isDbMissing || isJwtSecretMissing) {
+    return <DeploymentGuideView />;
+  }
 
   if (isLoggedIn === null) {
     return (

@@ -1,5 +1,4 @@
 import { Env } from "../types";
-import { SystemSecretsModel } from "../models/systemSecrets";
 
 // Re-export Geo Utilities
 export { getRequestCoordinates, calculateDistanceInKm } from "../utils/geo";
@@ -49,13 +48,8 @@ export {
  * Gets or creates the JWT secret from system settings.
  */
 export async function getOrCreateJwtSecret(env: Env): Promise<string> {
-  const secretsModel = new SystemSecretsModel(env.DB);
-  let secret = await secretsModel.get("jwt_secret");
-  if (!secret) {
-    const bytes = new Uint8Array(64); // 512 bits for HS512 (Post-Quantum safe symmetric key size)
-    crypto.getRandomValues(bytes);
-    secret = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    await secretsModel.set("jwt_secret", secret);
+  if (!env.JWT_SECRET) {
+    throw new Error("JWT_SECRET environment variable is missing.");
   }
-  return secret;
+  return env.JWT_SECRET;
 }

@@ -1,23 +1,110 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { User } from "../types";
+import { encryptEnvelope, decryptEnvelope, rotateEnvelopeDek } from "../utils/envelope";
 
 export class UserModel {
-  constructor(private db: D1Database) {}
+  constructor(private db: D1Database, private env?: any) {}
+
+  private async processUserSecrets(user: any): Promise<any> {
+    if (!user) return null;
+
+    let updatedFields: any = {};
+    let shouldUpdateDb = false;
+
+    // 1. Process totp_secret
+    let totpSecret = user.totp_secret;
+    if (user.totp_secret_encrypted && user.totp_secret_dek) {
+      try {
+        totpSecret = await decryptEnvelope(user.totp_secret_encrypted, user.totp_secret_dek, this.env);
+        
+        // Check for DEK rotation (vN -> vN+1)
+        const rotatedDek = await rotateEnvelopeDek(user.totp_secret_dek, this.env);
+        if (rotatedDek) {
+          updatedFields.totp_secret_dek = rotatedDek;
+          shouldUpdateDb = true;
+        }
+      } catch (e) {
+        console.error(`[Envelope Encryption] Failed to decrypt/rotate totp_secret for user ${user.id}:`, e);
+      }
+    } else if (user.totp_secret) {
+      // Legacy plain-text secret found. If KEK is active, migrate to envelope encryption!
+      const encrypted = await encryptEnvelope(user.totp_secret, this.env);
+      if (encrypted) {
+        updatedFields.totp_secret_encrypted = encrypted.dataEncrypted;
+        updatedFields.totp_secret_dek = encrypted.dekEncrypted;
+        updatedFields.totp_secret = null; // Clear plain-text column
+        shouldUpdateDb = true;
+      }
+    }
+
+    // 2. Process totp_recovery_keys
+    let totpRecoveryKeys = user.totp_recovery_keys;
+    if (user.totp_recovery_keys_encrypted && user.totp_recovery_keys_dek) {
+      try {
+        totpRecoveryKeys = await decryptEnvelope(user.totp_recovery_keys_encrypted, user.totp_recovery_keys_dek, this.env);
+
+        // Check for DEK rotation (vN -> vN+1)
+        const rotatedDek = await rotateEnvelopeDek(user.totp_recovery_keys_dek, this.env);
+        if (rotatedDek) {
+          updatedFields.totp_recovery_keys_dek = rotatedDek;
+          shouldUpdateDb = true;
+        }
+      } catch (e) {
+        console.error(`[Envelope Encryption] Failed to decrypt/rotate totp_recovery_keys for user ${user.id}:`, e);
+      }
+    } else if (user.totp_recovery_keys) {
+      // Legacy plain-text recovery keys found. If KEK is active, migrate to envelope encryption!
+      const encrypted = await encryptEnvelope(user.totp_recovery_keys, this.env);
+      if (encrypted) {
+        updatedFields.totp_recovery_keys_encrypted = encrypted.dataEncrypted;
+        updatedFields.totp_recovery_keys_dek = encrypted.dekEncrypted;
+        updatedFields.totp_recovery_keys = null; // Clear plain-text column
+        shouldUpdateDb = true;
+      }
+    }
+
+    // Update D1 database if migration or rotation occurred
+    if (shouldUpdateDb) {
+      try {
+        const updateParts: string[] = [];
+        const bindings: any[] = [];
+        for (const [key, val] of Object.entries(updatedFields)) {
+          updateParts.push(`${key} = ?`);
+          bindings.push(val);
+        }
+        bindings.push(user.id);
+
+        await this.db
+          .prepare(`UPDATE users SET ${updateParts.join(", ")} WHERE id = ?`)
+          .bind(...bindings)
+          .run();
+        
+        // Merge the newly updated/encrypted values to the returned user object
+        Object.assign(user, updatedFields);
+      } catch (e) {
+        console.error(`[Envelope Encryption] Failed to save rotated/migrated secrets for user ${user.id}:`, e);
+      }
+    }
+
+    // Return the user object with decrypted totp_secret and totp_recovery_keys
+    return {
+      ...user,
+      totp_secret: totpSecret,
+      totp_recovery_keys: totpRecoveryKeys
+    };
+  }
 
   async getById(id: string): Promise<any | null> {
-    return await this.db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+    const user = await this.db.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+    return await this.processUserSecrets(user);
   }
 
   async getByUsername(username: string): Promise<any | null> {
-    return await this.db.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+    const user = await this.db.prepare("SELECT * FROM users WHERE username = ?").bind(username).first();
+    return await this.processUserSecrets(user);
   }
 
   async listAll(): Promise<User[]> {
-    // Note regarding activity timestamps:
-    // Due to schema history, `users.last_active_at` actually records the time of the last DNS resolution 
-    // triggered by any of the user's profiles, NOT their web interface activity.
-    // Therefore, we query the latest `timestamp` from `user_activity_log` to get the true "Last Active" time,
-    // and alias `users.last_active_at` as `last_resolve_at`.
     const { results } = await this.db.prepare(`
       SELECT 
         u.id, 
@@ -27,11 +114,8 @@ export class UserModel {
         u.totp_enabled,
         u.timezone,
         u.locale,
-        MAX(al.timestamp) as last_active_at,
         u.last_active_at as last_resolve_at
       FROM users u
-      LEFT JOIN user_activity_log al ON al.user_id = u.id
-      GROUP BY u.id
       ORDER BY u.created_at DESC
     `).all<User>();
     return results;
@@ -88,26 +172,45 @@ export class UserModel {
   }
 
   /**
-   * Activates TOTP for a user by storing the encrypted secret and hashed recovery keys.
-   * @param id - User ID
-   * @param secret - Base32 TOTP secret
-   * @param recoveryKeysHashed - JSON array of SHA-256-hashed recovery keys
+   * Activates TOTP for a user by storing the envelope encrypted secret and recovery keys.
    */
   async updateTOTP(id: string, secret: string, recoveryKeysHashed: string[]): Promise<boolean> {
-    const result = await this.db
-      .prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1, totp_skip_password = 1, totp_recovery_keys = ? WHERE id = ?')
-      .bind(secret, JSON.stringify(recoveryKeysHashed), id)
-      .run();
-    return result.success;
+    const recoveryKeysStr = JSON.stringify(recoveryKeysHashed);
+    const encryptedSecret = await encryptEnvelope(secret, this.env);
+    const encryptedKeys = await encryptEnvelope(recoveryKeysStr, this.env);
+
+    if (encryptedSecret && encryptedKeys) {
+      const result = await this.db
+        .prepare(
+          'UPDATE users SET totp_secret = NULL, totp_secret_encrypted = ?, totp_secret_dek = ?, totp_enabled = 1, totp_skip_password = 1, totp_recovery_keys = NULL, totp_recovery_keys_encrypted = ?, totp_recovery_keys_dek = ? WHERE id = ?'
+        )
+        .bind(
+          encryptedSecret.dataEncrypted,
+          encryptedSecret.dekEncrypted,
+          encryptedKeys.dataEncrypted,
+          encryptedKeys.dekEncrypted,
+          id
+        )
+        .run();
+      return result.success;
+    } else {
+      // Fallback: plaintext storage if KEK is not configured
+      const result = await this.db
+        .prepare(
+          'UPDATE users SET totp_secret = ?, totp_secret_encrypted = NULL, totp_secret_dek = NULL, totp_enabled = 1, totp_skip_password = 1, totp_recovery_keys = ?, totp_recovery_keys_encrypted = NULL, totp_recovery_keys_dek = NULL WHERE id = ?'
+        )
+        .bind(secret, recoveryKeysStr, id)
+        .run();
+      return result.success;
+    }
   }
 
   /**
    * Disables TOTP and clears all TOTP-related data for a user.
-   * @param id - User ID
    */
   async removeTOTP(id: string): Promise<boolean> {
     const result = await this.db
-      .prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_skip_password = 0, totp_recovery_keys = NULL WHERE id = ?')
+      .prepare('UPDATE users SET totp_secret = NULL, totp_secret_encrypted = NULL, totp_secret_dek = NULL, totp_enabled = 0, totp_skip_password = 0, totp_recovery_keys = NULL, totp_recovery_keys_encrypted = NULL, totp_recovery_keys_dek = NULL WHERE id = ?')
       .bind(id)
       .run();
     return result.success;
@@ -115,8 +218,6 @@ export class UserModel {
 
   /**
    * Updates the skip-password setting for a user's TOTP configuration.
-   * @param id - User ID
-   * @param skipPassword - Whether to skip password during login
    */
   async updateTOTPSettings(id: string, skipPassword: boolean): Promise<boolean> {
     const result = await this.db
@@ -128,17 +229,25 @@ export class UserModel {
 
   /**
    * Removes a single used recovery key from the stored hash array.
-   * @param id - User ID
-   * @param usedIndex - Index of the consumed key to remove
-   * @param currentHashes - Current full array of hashed recovery keys
    */
   async consumeRecoveryKey(id: string, usedIndex: number, currentHashes: string[]): Promise<boolean> {
     const updated = currentHashes.filter((_, i) => i !== usedIndex);
-    const result = await this.db
-      .prepare('UPDATE users SET totp_recovery_keys = ? WHERE id = ?')
-      .bind(JSON.stringify(updated), id)
-      .run();
-    return result.success;
+    const updatedStr = JSON.stringify(updated);
+
+    const encryptedKeys = await encryptEnvelope(updatedStr, this.env);
+    if (encryptedKeys) {
+      const result = await this.db
+        .prepare('UPDATE users SET totp_recovery_keys = NULL, totp_recovery_keys_encrypted = ?, totp_recovery_keys_dek = ? WHERE id = ?')
+        .bind(encryptedKeys.dataEncrypted, encryptedKeys.dekEncrypted, id)
+        .run();
+      return result.success;
+    } else {
+      const result = await this.db
+        .prepare('UPDATE users SET totp_recovery_keys = ?, totp_recovery_keys_encrypted = NULL, totp_recovery_keys_dek = NULL WHERE id = ?')
+        .bind(updatedStr, id)
+        .run();
+      return result.success;
+    }
   }
 
   async updateLastActiveByProfile(profileId: string, now: number): Promise<boolean> {

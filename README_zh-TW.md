@@ -158,13 +158,23 @@ npm run db:setup
 npm run db:migrate:dev
 ```
 
-3.  啟動開發伺服器：
+3.  配置本地環境變數：
+    *   在專案根目錄下建立一個 `.dev.vars` 檔案，並新增用於會話 Token 簽名的 JWT 金鑰：
+        ```env
+        JWT_SECRET=您的隨機安全JWT金鑰
+        ```
+    *   （選填）透過新增金鑰加密金鑰（KEK）啟用敏感資料（如 TOTP 金鑰和復原金鑰）的伺服器端信封加密：
+        ```env
+        KEK_v1=您的隨機安全KEK_v1金鑰
+        ```
+
+4.  啟動開發伺服器：
 
 ```bash
 npm run dev
 ```
 
-4.  部署上線
+5.  部署上線
 
 ```bash
 npm run deploy
@@ -173,10 +183,12 @@ npm run deploy
 ### 線上部署 (Cloudflare Dashboard)
 
 1.  **Fork 本專案**：點擊頁面右上角的 `Fork` 按鈕，將倉庫複製到你的 GitHub 帳號下。
-2.  **建立 D1 資料庫**：登入 Cloudflare 控制台，前往 `Workers & Pages` > `D1`，建立一個新的資料庫（例如命名為 `obex_db`），並複製所建立的資料庫 ID。
+2.  **建立 D1 資料庫**：登入 Cloudflare 控制台，前往 `Workers & Pages` > `D1`，建立一個新的資料庫（例如命名为 `obex_db`），並複製所建立的資料庫 ID。
 3.  **配置資料庫 ID**：在你的 Fork 倉庫中，修改 `wrangler.toml` 檔案，將 `database_id` 替換為你剛才建立的資料庫 ID。
 4.  **建立 Worker**：前往 Cloudflare 控制台 `Workers & Pages` > `Create application` > `Create Worker`。
 5.  **從 GitHub 匯入**：在部署頁面選擇 `Deploy from GitHub`，關聯你 Fork 的專案並完成授權部署。
+6.  **配置 JWT 金鑰**：登入 Cloudflare 控制台，前往 `Workers & Pages` > 點擊您的 Worker > `設定` > `變數` > 在 `環境變數` 下點擊 `新增變數`。將名稱設定為 `JWT_SECRET`，類型選擇 `機密 (Secret)`，值中輸入一個隨機安全字串，然後點擊 `儲存並部署`。
+7.  **配置 KEK 啟用信封加密（選填）**：若要對 D1 資料庫中的敏感憑證（如 TOTP 金鑰和復原金鑰）啟用伺服器端信封加密，請新增一個名為 `KEK_v1`、類型為 `機密 (Secret)` 的變數，並輸入您的安全金鑰。在需要輪換 KEK 金鑰時，請按順序新增新的機密 `KEK_v(N+1)`（例如 `KEK_v2` -> `KEK_v3` 等）。
 
 ### 線上部署到 Cloudflare Pages (⚠️ 不推薦)
 

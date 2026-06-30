@@ -16,7 +16,7 @@ export async function handleAdminRequest(
   pathParts: string[],
   ctx: ExecutionContext
 ): Promise<Response> {
-  const userModel = new UserModel(env.DB);
+  const userModel = new UserModel(env.DB, env);
   const profileModel = new ProfileModel(env.DB);
 
   if (pathParts[2] === 'users') {

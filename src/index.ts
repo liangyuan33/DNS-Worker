@@ -39,6 +39,29 @@ export default {
 
       // Business API Router
       if (url.pathname.startsWith('/api/')) {
+        let isDbMissing = false;
+        try {
+          isDbMissing = !env.DB;
+        } catch (e) {
+          isDbMissing = true;
+        }
+        const isJwtSecretMissing = !env.JWT_SECRET;
+
+        if (isDbMissing || isJwtSecretMissing) {
+          return new Response(JSON.stringify({
+            error: "configuration_error",
+            isDbMissing,
+            isJwtSecretMissing,
+            message: "ObexDNS is not fully configured. Please configure the D1 database binding and JWT_SECRET secret variable."
+          }), {
+            status: 503,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": "*"
+            }
+          });
+        }
+
         // Authenticate request
         currentUser = await getCurrentUser(request, env);
 
@@ -127,9 +150,21 @@ export default {
 
         const contentType = response.headers.get('Content-Type') || '';
         if (contentType.includes('text/html')) {
+          let isDbMissing = false;
+          try {
+            isDbMissing = !env.DB;
+          } catch (e) {
+            isDbMissing = true;
+          }
+          const isJwtSecretMissing = !env.JWT_SECRET;
+
           let configStr = "{}";
           try {
-             configStr = JSON.stringify({ nonce });
+             configStr = JSON.stringify({
+               nonce,
+               isDbMissing,
+               isJwtSecretMissing
+             });
           } catch (e) { }
           
           return new HTMLRewriter()

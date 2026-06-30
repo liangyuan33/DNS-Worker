@@ -14,7 +14,7 @@ export async function handleMeRequest(
   pathParts: string[],
   ctx: ExecutionContext
 ): Promise<Response> {
-  const userModel = new UserModel(env.DB);
+  const userModel = new UserModel(env.DB, env);
   const logModel = new LogModel(env.DB);
   const action = pathParts[2];
 

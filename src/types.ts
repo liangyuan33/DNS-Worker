@@ -1,9 +1,9 @@
 import { D1Database, ExecutionContext as CFExecutionContext } from "@cloudflare/workers-types";
-import { SystemSecretsModel } from "./models/systemSecrets";
 
 export interface Env {
   DB: D1Database;
   ASSETS: any;
+  JWT_SECRET?: string;
   MAX_ACCESS_POINTS_PER_PROFILE?: string | number;
   MAX_PROFILES_PER_USER?: string | number;
   DEFAULT_SESSION_EXPIRATION_MINUTES?: string | number;

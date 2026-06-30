@@ -15,7 +15,7 @@ export async function handleSecurityRequest(
   pathParts: string[],
   ctx: ExecutionContext
 ): Promise<Response> {
-  const userModel = new UserModel(env.DB);
+  const userModel = new UserModel(env.DB, env);
   const activityLog = new ActivityLogModel(env.DB);
   const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const userAgent = request.headers.get("User-Agent");

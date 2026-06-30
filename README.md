@@ -151,13 +151,23 @@ npm run db:setup
 npm run db:migrate:dev
 ```
 
-3.  Start the development server:
+3.  Configure environment variables:
+    *   Create a `.dev.vars` file in the root directory and add a secure random JWT secret (required for session token signing):
+        ```env
+        JWT_SECRET=your_secure_random_string_here
+        ```
+    *   (Optional) Enable Envelope Encryption for sensitive credentials (like TOTP secrets and recovery keys) by adding a Key Encryption Key (KEK):
+        ```env
+        KEK_v1=your_secure_kek_v1_key_string
+        ```
+
+4.  Start the development server:
 
 ```bash
 npm run dev
 ```
 
-4.  Deploy online
+5.  Deploy online
 
 ```bash
 npm run deploy
@@ -169,6 +179,8 @@ npm run deploy
 3.  **Configure Database ID**: In your forked repository, edit the `wrangler.toml` file and replace `database_id` with the ID of the database you just created.
 4.  **Create Worker**: Go to Cloudflare dashboard `Workers & Pages` > `Create application` > `Create Worker`.
 5.  **Import from GitHub**: On the deployment page, select `Deploy from GitHub`, connect your forked project, and complete the authorized deployment.
+6.  **Configure JWT Secret**: Go to Cloudflare Dashboard -> `Workers & Pages` -> click on your Worker -> `Settings` -> `Variables` -> under `Environment Variables` click `Add Variable`. Set Name to `JWT_SECRET`, choose type `Secret`, input a secure random string as Value, and click `Save and Deploy`.
+7.  **Configure KEK for Envelope Encryption (Optional)**: To enable server-side envelope encryption for sensitive credentials (such as TOTP keys and recovery keys) in D1, add a variable named `KEK_v1`, type `Secret`, and input a secure key value. When you need to rotate the KEK key, add a new secret `KEK_v(N+1)` (e.g. `KEK_v2` -> `KEK_v3`, etc.) sequentially.
 
 ### Online Deployment to Cloudflare Pages (⚠️ Not Recommended)
 

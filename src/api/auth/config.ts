@@ -8,7 +8,7 @@ import { USERNAME_REGEX } from "../../utils/validator";
  */
 export async function handleAuthConfigRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const userModel = new UserModel(env.DB);
+  const userModel = new UserModel(env.DB, env);
 
   // 公开配置接口
   if (url.pathname === '/api/auth/config' && request.method === 'GET') {

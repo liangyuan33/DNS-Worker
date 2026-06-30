@@ -59,7 +59,7 @@ export async function handleDoHRequest(
           await profileModel.updateLastActive(profileId, nowSec);
           
           // Cascading update to profile owner active timestamp
-          const userModel = new UserModel(env.DB);
+          const userModel = new UserModel(env.DB, env);
           await userModel.updateLastActiveByProfile(profileId, nowSec);
           
           // Store throttle marker

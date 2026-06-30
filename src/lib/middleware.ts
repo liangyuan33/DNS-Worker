@@ -61,7 +61,7 @@ export async function getCurrentUser(request: Request, env: Env): Promise<User |
       const lastActive = session.last_active_at || session.created_at;
 
       // Single Source of Truth inactivity check on server
-      const userModel = new UserModel(env.DB);
+      const userModel = new UserModel(env.DB, env);
       const dbUser = await userModel.getById(payload.userId);
 
       if (dbUser && dbUser.pin_hash && !session.is_paused) {

@@ -27,7 +27,7 @@ export async function handleScheduled(
     const now = Math.floor(Date.now() / 1000);
 
     try {
-      const userModel = new UserModel(env.DB);
+      const userModel = new UserModel(env.DB, env);
       const { clearedProfiles, deletedUsers } = await userModel.applyInactivityPolicy(now);
       if (clearedProfiles > 0 || deletedUsers > 0) {
         console.log(`[Cron] Inactivity cleanup: cleared ${clearedProfiles} profile(s), deleted ${deletedUsers} user(s).`);

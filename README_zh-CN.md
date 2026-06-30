@@ -163,6 +163,10 @@ npm run db:migrate:dev
         ```env
         JWT_SECRET=您的随机安全JWT密钥
         ```
+    *   （可选）通过添加密钥加密密钥（KEK）启用敏感数据（如 TOTP 密钥和恢复密钥）的服务端信封加密：
+        ```env
+        KEK_v1=您的随机安全KEK_v1密钥
+        ```
 
 4.  启动开发服务器：
 
@@ -184,6 +188,7 @@ npm run deploy
 4.  **创建 Worker**：前往 Cloudflare 控制台 `Workers & Pages` > `Create application` > `Create Worker`。
 5.  **从 GitHub 导入**：在部署页面选择 `Deploy from GitHub`，关联你 Fork 的项目并完成授权部署。
 6.  **配置 JWT 密钥**：登录 Cloudflare 控制台，前往 `Workers & Pages` > 点击您的 Worker > `设置` > `变量` > 在 `环境变量` 下点击 `添加变量`。将名称设置为 `JWT_SECRET`，类型选择 `机密 (Secret)`，值中输入一个随机安全字符串，然后点击 `保存并部署`。
+7.  **配置 KEK 启用信封加密（可选）**：若要对 D1 数据库中的敏感凭据（如 TOTP 密钥和恢复密钥）启用服务端信封加密，请添加一个名为 `KEK_v1`、类型为 `机密 (Secret)` 的变量，并输入您的安全密钥。在需要轮换 KEK 密钥时，请按顺序添加新的机密 `KEK_v(N+1)`（例如 `KEK_v2` -> `KEK_v3` 等）。
 
 ### 线上部署到 Cloudflare Pages (⚠️ 不推荐)
 

@@ -26,7 +26,7 @@ import { verifyTurnstile } from "./utils";
  */
 export async function handleLoginRequest(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  const userModel = new UserModel(env.DB);
+  const userModel = new UserModel(env.DB, env);
   const activityLog = new ActivityLogModel(env.DB);
   const cache = (caches as any).default;
   const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";

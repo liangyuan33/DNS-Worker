@@ -27,7 +27,10 @@ crons = ["* * * * *"]
 [placement]
 # mode = "targeted"
 # region = "aws:ap-southeast-1"
-mode = "smart"
+# Or
+# mode = "smart"
+# Or
+mode = "off"
 
 [observability]
 enabled = true

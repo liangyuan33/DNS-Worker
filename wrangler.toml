@@ -1,4 +1,4 @@
-name = "obex-dns"
+name = "dns-worker"
 main = "src/index.ts"
 compatibility_date = "2026-02-28"
 compatibility_flags = ["nodejs_compat"]

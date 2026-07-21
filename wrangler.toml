@@ -19,7 +19,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "obex_db"
 # This field must be filled with your database ID; otherwise the deployment will fail.
-database_id = "fbff22a8-928b-4439-8686-4f321a18da3a"
+database_id = "8df08878-9222-43b2-bce7-52f76c708843"
 
 [triggers]
 crons = ["* * * * *"]

@@ -54,7 +54,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ chartData, range }) => {
               isAnimationActive={true}
               shared={true}
               labelFormatter={(ts) => {
-                const d = new Date(ts * 1000);
+                const d = new Date(Number(ts) * 1000);
                 return formatDateTime(d, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
               }}
               contentStyle={{

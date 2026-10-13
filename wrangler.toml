@@ -30,7 +30,7 @@ run_worker_first = true
 binding = "DB"
 database_name = "dns_worker_db"
 # This field must be filled with your database ID; otherwise the deployment will fail.
-database_id = "13d8c24f-064a-40d6-8b10-fa70bb3f79ab"
+database_id = "1b978c00-d05f-43f1-8bcf-d729df2ec0ed"
 
 [triggers]
 # Run scheduled maintenance tasks every minute.

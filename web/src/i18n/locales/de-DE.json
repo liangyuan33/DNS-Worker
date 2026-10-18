@@ -73,6 +73,7 @@
     "password": "Passwort",
     "passwordPlaceholder": "Ihr Passwort",
     "loginBtn": "Anmelden",
+    "unlockSession": "Bildschirm entsperren",
     "signupBtn": "Registrieren",
     "totpVerification": "2FA/TOTP-Verifizierung",
     "noAccount": "Kein Konto? Jetzt registrieren",
@@ -732,7 +733,6 @@
     "dangerZone": "Gefahrenbereich",
     "clearLogs": "Alle Protokolle löschen",
     "clearLogsDesc": "Dadurch werden alle DNS-Abfrageprotokolle gelöscht, die unter Ihren Profilen generiert wurden. Diese Aktion ist unumkehrbar.",
-    "currentDbSize": "Aktuelle Datenbankgröße",
     "clearLogsBtn": "Protokolle jetzt löschen",
     "deleteAccount": "Konto löschen",
     "deleteAccountDesc": "Löschen Sie Ihr Konto und alle damit verbundenen Daten dauerhaft. Sie verlieren den Zugriff auf alle Ihre DNS-Konfigurationen.",
@@ -930,7 +930,7 @@
     "totpCode": "Authenticator-Code"
   },
   "intro": {
-    "item1Title": "Obex Schutz-DNS",
+    "item1Title": "DNS Worker Schützendes DNS",
     "item1Desc": "Ein DNS-Resolver auf Basis von Cloudflare Workers & D1, optimiert für Geschwindigkeit und Sicherheit.",
     "item2Title": "DoH-Privatsphäre",
     "item2Desc": "Verhindert DNS-Abfangen und schützt Ihre Privatsphäre durch verschlüsselte DNS over HTTPS (RFC 8484) Tunnel.",
@@ -947,7 +947,11 @@
     "item8Title": "Mehrere Profile verwalten",
     "item8Desc": "Erstellen und verwalten Sie separate DNS-Profile für verschiedene Geräte oder Netzwerkumgebungen.",
     "item9Title": "Mehrere Zugangspunkte",
-    "item9Desc": "Konfigurieren Sie dedizierte Zugangspunkte für verschiedene Geräte, um Protokolle und Statistiken getrennt zu analysieren."
+    "item9Desc": "Konfigurieren Sie dedizierte Zugangspunkte für verschiedene Geräte, um Protokolle und Statistiken getrennt zu analysieren.",
+    "item10Title": "Zero-Knowledge-Protokolle",
+    "item10Desc": "Ende-zu-Ende-Verschlüsselung mit Post-Quanten-Hybrid-KEM (P256-MLKEM768). Schlüssel verbleiben lokal, der Server hat null Einblick.",
+    "item11Title": "D1 / Turso / File Multi-DB-Unterstützung",
+    "item11Desc": "Unterstützt Cloudflare D1, verteilte Turso Cloud-SQLite und lokale Dateidatenbanken, um Quotenlimits flexibel zu überwinden."
   },
   "deploymentGuide": {
     "title": "DNS Worker Einrichtungs- und Bereitstellungshandbuch",

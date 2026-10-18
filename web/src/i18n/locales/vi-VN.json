@@ -73,6 +73,7 @@
     "password": "Mật khẩu",
     "passwordPlaceholder": "Mật khẩu của bạn",
     "loginBtn": "Đăng nhập",
+    "unlockSession": "Mở khóa màn hình",
     "signupBtn": "Đăng ký",
     "totpVerification": "Xác thực TOTP",
     "noAccount": "Chưa có tài khoản? Đăng ký ngay",
@@ -732,7 +733,6 @@
     "dangerZone": "Khu vực nguy hiểm",
     "clearLogs": "Xóa tất cả nhật ký",
     "clearLogsDesc": "Hành động này sẽ xóa nhật ký truy vấn được tạo bởi tất cả các cấu hình DNS dưới tên bạn. Hành động này không thể hoàn tác.",
-    "currentDbSize": "Kích thước cơ sở dữ liệu hiện tại",
     "clearLogsBtn": "Xóa nhật ký ngay bây giờ",
     "deleteAccount": "Xóa tài khoản",
     "deleteAccountDesc": "Xóa vĩnh viễn tài khoản của bạn và tất cả dữ liệu liên quan. Hành động này sẽ khiến bạn mất tất cả các cấu hình phân giải.",
@@ -930,7 +930,7 @@
     "totpCode": "Mã xác thực"
   },
   "intro": {
-    "item1Title": "Obex Protective DNS",
+    "item1Title": "DNS Worker Protective DNS",
     "item1Desc": "Bộ phân giải DNS dựa trên Cloudflare Workers & D1, nỗ lực tối đa vì tốc độ và bảo mật.",
     "item2Title": "Bảo vệ quyền riêng tư DoH",
     "item2Desc": "Ngăn chặn việc bị chặn và tăng cường quyền riêng tư thông qua đường hầm mã hóa DNS over HTTPS (RFC 8484).",
@@ -947,7 +947,11 @@
     "item8Title": "Quản lý nhiều cấu hình",
     "item8Desc": "Tạo và quản lý nhiều cấu hình độc lập cho các thiết bị hoặc môi trường mạng khác nhau.",
     "item9Title": "Quản lý nhiều điểm truy cập",
-    "item9Desc": "Cấu hình các điểm truy cập DNS riêng cho các thiết bị khác nhau, thực hiện cách ly và phân tích tinh vi dữ liệu nhật ký và thống kê."
+    "item9Desc": "Cấu hình các điểm truy cập DNS riêng cho các thiết bị khác nhau, thực hiện cách ly và phân tích tinh vi dữ liệu nhật ký và thống kê.",
+    "item10Title": "Nhật ký Zero-Knowledge",
+    "item10Desc": "Mã hóa đầu cuối (E2EE) với mật mã lai hậu lượng tử (P256-MLKEM768). Khóa chỉ lưu cục bộ, đảm bảo máy chủ hoàn toàn không biết gì.",
+    "item11Title": "Hỗ trợ đa DB D1/Turso/File",
+    "item11Desc": "Hỗ trợ Cloudflare D1, Turso SQLite phân tán trên đám mây và lưu trữ tệp cục bộ, giúp vượt qua giới hạn dung lượng miễn phí."
   },
   "deploymentGuide": {
     "title": "Hướng dẫn Thiết lập & Triển khai DNS Worker",

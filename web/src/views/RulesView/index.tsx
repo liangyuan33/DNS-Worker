@@ -1,21 +1,31 @@
-import React, { useState, useEffect } from "react";
-import { Callout, Intent, ButtonGroup, Button } from "@blueprintjs/core";
+import React, { useState, useEffect, useMemo } from "react";
+import { Callout, Intent, ButtonGroup, Button, Tag, PopoverNext, Spinner } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 
-import type {  Rule, RulesViewProps, ProfileSettings  } from "./types";
+import type { Rule, RulesViewProps, ProfileSettings } from "./types";
 import { AddRuleCard } from "./components/AddRuleCard";
 import { RulesTable } from "./components/RulesTable";
 import { EditRuleDialog } from "./components/EditRuleDialog";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { getProfileRules, getProfileDetails, addProfileRule, updateProfileRule, deleteProfileRule } from "../../services";
+import {
+  getProfileRules,
+  getProfileDetails,
+  addProfileRule,
+  updateProfileRule,
+  deleteProfileRule,
+  getClientInfo,
+} from "../../services";
 
 export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPrefillUsed, toasterRef }) => {
   const navigate = useNavigate();
   const [rules, setRules] = useState<Rule[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
-  const [, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const [newRule, setNewRule] = useState<{
@@ -35,6 +45,43 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   });
 
   const [editRule, setEditRule] = useState<Rule | null>(null);
+  const [substituteDomain, setSubstituteDomain] = useState<string>("www.okx.com");
+  const [isPromptOpen, setIsPromptOpen] = useState(false);
+
+  useEffect(() => {
+    getClientInfo()
+      .then((info) => {
+        if (info.substituteDomain) {
+          setSubstituteDomain(info.substituteDomain);
+        }
+      })
+      .catch((e) => console.warn("Failed to fetch clientInfo for substituteDomain:", e));
+  }, []);
+
+  const hasSelfRedirect = useMemo(() => {
+    const currentHost = window.location.hostname.trim().toLowerCase();
+    if (!currentHost) return false;
+    return rules.some((r) => {
+      if (r.type !== "REDIRECT") return false;
+      const pattern = r.pattern.trim().toLowerCase();
+      return pattern === currentHost || pattern === `*.${currentHost}`;
+    });
+  }, [rules]);
+
+  const handleApplySelfRedirect = () => {
+    setIsPromptOpen(false);
+    setNewRule({
+      type: "REDIRECT",
+      pattern: window.location.hostname,
+      v_a: "",
+      v_aaaa: "",
+      v_txt: "",
+      v_cname: substituteDomain || "www.okx.com",
+    });
+    setTimeout(() => {
+      document.getElementById("rule-pattern")?.focus();
+    }, 100);
+  };
 
   useEffect(() => {
     if (prefill) {
@@ -99,6 +146,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
       });
       return;
     }
+    setIsAdding(true);
     try {
       await addProfileRule(profileId, { ...newRule, pattern: trimmedPattern });
       toasterRef?.current?.show({
@@ -113,12 +161,14 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
         v_txt: "",
         v_cname: "",
       });
-      fetchRules();
+      await fetchRules();
     } catch (e: any) {
       toasterRef?.current?.show({
         message: e.message || t("rules.addFailed", "Failed to add rule"),
         intent: Intent.DANGER,
       });
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -140,6 +190,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
       });
       return;
     }
+    setIsSaving(true);
     try {
       await updateProfileRule(profileId, { ...editRule, pattern: trimmedPattern } as Rule);
       toasterRef?.current?.show({
@@ -147,12 +198,14 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
         intent: Intent.SUCCESS,
       });
       setEditRule(null);
-      fetchRules();
+      await fetchRules();
     } catch (e: any) {
       toasterRef?.current?.show({
         message: e.message || t("rules.updateFailed", "Failed to update rule"),
         intent: Intent.DANGER,
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -165,13 +218,16 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   };
 
   const deleteRule = async (id: number) => {
+    setIsDeleting(true);
     try {
       await deleteProfileRule(profileId, id);
     } catch (e) {
       console.error(e);
+    } finally {
+      setIsDeleting(false);
     }
     setEditRule(null);
-    fetchRules();
+    await fetchRules();
   };
 
   useEffect(() => {
@@ -181,37 +237,98 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   return (
     <div className={clsx("md:px-8 w-full min-w-0 max-w-5xl mx-auto", isMobile ? "p-1" : "px-8")}>
       <div className="mb-8">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="w-full md:w-auto flex-1">
             {isMobile ? (
-              <ButtonGroup minimal fill={isMobile}>
-                <Button
-                  active={true}
-                  onClick={() => navigate(`/dash/${profileId}/rules`)}
-                  text={t("rules.title")}
-                  large
-                />
-                <Button
-                  active={false}
-                  onClick={() => navigate(`/dash/${profileId}/filter`)}
-                  text={t("filtering.title")}
-                  large
-                />
-              </ButtonGroup>
+              <div className="flex items-center gap-2">
+                <ButtonGroup minimal fill={isMobile} className="flex-1">
+                  <Button
+                    active={true}
+                    onClick={() => navigate(`/dash/${profileId}/rules`)}
+                    text={t("rules.title")}
+                    large
+                  />
+                  <Button
+                    active={false}
+                    onClick={() => navigate(`/dash/${profileId}/filter`)}
+                    text={t("filtering.title")}
+                    large
+                  />
+                </ButtonGroup>
+                {loading && <Spinner size={16} />}
+              </div>
             ) : (
-              <h1 className="bp6-heading">{t("rules.title")}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="bp6-heading m-0">{t("rules.title")}</h1>
+                {loading && <Spinner size={20} />}
+              </div>
             )}
             <p className="bp6-text-muted mt-2!">{t("rules.subtitle")}</p>
           </div>
+
+          {!loading && !hasSelfRedirect && (
+            <div className="flex items-center gap-3 self-start md:self-auto">
+              <PopoverNext
+                isOpen={isPromptOpen}
+                onInteraction={setIsPromptOpen}
+                placement="bottom-end"
+                portalClassName="z-20000"
+                content={
+                  <div className="p-4 w-72 sm:w-80 space-y-3 text-sm">
+                    <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed m-0">
+                      {t("rules.addSelfRedirectPrompt", "是否增加指向本站的 CNAME 规则，用于地区网络优化（中国大陆用户推荐）？")}
+                    </p>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <Button
+                        size="small"
+                        variant="minimal"
+                        text={t("common.no", "否")}
+                        onClick={() => setIsPromptOpen(false)}
+                      />
+                      <Button
+                        size="small"
+                        intent={Intent.PRIMARY}
+                        text={t("common.yes", "是")}
+                        onClick={handleApplySelfRedirect}
+                      />
+                    </div>
+                  </div>
+                }
+              >
+                <Tag
+                  minimal
+                  interactive
+                  intent={Intent.PRIMARY}
+                  className="cursor-pointer select-none font-medium"
+                >
+                  {t("rules.addSelfRedirectTag", "增加本站重定向？")}
+                </Tag>
+              </PopoverNext>
+            </div>
+          )}
         </div>
       </div>
 
-      <AddRuleCard newRule={newRule} setNewRule={setNewRule} addRule={addRule} />
+      <AddRuleCard newRule={newRule} setNewRule={setNewRule} addRule={addRule} loading={isAdding} />
 
-      {rules.length === 0 ? (
+      {loading && rules.length === 0 ? (
+        <div className="p-16 flex flex-col justify-center items-center gap-3">
+          <Spinner size={32} />
+          <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+            {t("common.loading", "加载中...")}
+          </span>
+        </div>
+      ) : rules.length === 0 ? (
         <Callout title={t("rules.noRulesTitle")}>{t("rules.noRulesDesc")}</Callout>
       ) : (
-        <RulesTable rules={rules} startEdit={startEdit} getBlockDetail={getBlockDetail} />
+        <div className="relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white/40 dark:bg-gray-900/40 backdrop-blur-xs flex items-center justify-center z-10 rounded-lg">
+              <Spinner size={32} />
+            </div>
+          )}
+          <RulesTable rules={rules} startEdit={startEdit} getBlockDetail={getBlockDetail} />
+        </div>
       )}
 
       <EditRuleDialog
@@ -220,6 +337,8 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
         saveEditRule={saveEditRule}
         cancelEdit={cancelEdit}
         deleteRule={deleteRule}
+        isSaving={isSaving}
+        isDeleting={isDeleting}
       />
     </div>
   );

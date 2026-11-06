@@ -59,11 +59,52 @@ async function runIssueVerificationTests() {
     }) as any;
 
     // Test 1.1: Content smaller than maxBytes -> not truncated
+    let capturedHeaders: any = null;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      capturedHeaders = init?.headers;
+      return new Response(samplePayloadBytes, {
+        status: 200,
+        headers: { "Content-Type": "text/plain" }
+      });
+    }) as any;
+
     const resNormal = await fetchListContent(mockListUrl, 10000, 5000, () => {});
     assert.strictEqual(resNormal.count, 100);
     assert.strictEqual(resNormal.error, null);
     assert.strictEqual(resNormal.truncated, false, "Should not be truncated when size is within limit");
-    console.log("   ✓ Non-truncated list parsed completely with truncated=false.");
+    assert.ok(capturedHeaders, "Headers should be provided to fetch");
+    const ua = capturedHeaders["User-Agent"] || (capturedHeaders instanceof Headers ? capturedHeaders.get("User-Agent") : "");
+    assert.ok(ua?.includes("DNS-Worker"), `User-Agent should identify as DNS-Worker, got: ${ua}`);
+    console.log("   ✓ Non-truncated list parsed completely with standardized DNS-Worker User-Agent.");
+
+    // Test 1.1b: Transient 525 retry mechanism
+    let attemptCount = 0;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      attemptCount++;
+      if (attemptCount === 1) {
+        // First attempt returns Cloudflare 525
+        return new Response("", { status: 525, statusText: "" });
+      }
+      // Second attempt succeeds
+      return new Response(samplePayloadBytes, {
+        status: 200,
+        headers: { "Content-Type": "text/plain" }
+      });
+    }) as any;
+
+    const resRetry = await fetchListContent(mockListUrl, 10000, 5000, () => {});
+    assert.strictEqual(attemptCount, 2, "Should have retried after initial 525 failure");
+    assert.strictEqual(resRetry.count, 100);
+    assert.strictEqual(resRetry.error, null);
+    console.log("   ✓ Transient HTTP 525 successfully recovered via backoff retry.");
+
+    // Reset fetch mock for 1.2
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      return new Response(samplePayloadBytes, {
+        status: 200,
+        headers: { "Content-Type": "text/plain" }
+      });
+    }) as any;
 
     // Test 1.2: Content larger than maxBytes (e.g. limit to 500 bytes) -> truncated=true
     let parsedCountTruncated = 0;
@@ -100,11 +141,47 @@ async function runIssueVerificationTests() {
       ASSETS: {}
     };
 
-    const syncWarning = await syncSingleList("prof_trunc_test", { id: 42, url: mockListUrl }, mockEnv, mockListModel, mockListBloomModel, Math.floor(Date.now() / 1000));
+    const syncRes = await syncSingleList("prof_trunc_test", { id: 42, url: mockListUrl }, mockEnv, mockListModel, mockListBloomModel, Math.floor(Date.now() / 1000));
+    const syncWarning = syncRes.syncError;
     assert.ok(syncWarning !== null, "syncError should not be null on truncation");
     assert.ok(syncWarning?.includes("truncated"), "syncError should mention truncation");
     assert.strictEqual(savedSyncStatus?.syncError, syncWarning, "sync_error should be saved in database");
     console.log("   ✓ syncSingleList safely recorded truncation warning without silent pass.");
+
+    // Test 1.4: Zero-allocation addPipePipe bit-for-bit equivalence with add("||" + domain)
+    const bfStandard = BloomFilter.create(10000, 0.0001);
+    const bfOptimized = BloomFilter.create(10000, 0.0001);
+    const testDomains = ["adservice.google.com", "tracker.analytics.net", "telemetry.badsite.org"];
+    for (const d of testDomains) {
+      bfStandard.add(`||${d}`);
+      bfOptimized.addPipePipe(d);
+    }
+    const buf1 = bfStandard.toUint8Array();
+    const buf2 = bfOptimized.toUint8Array();
+    assert.strictEqual(buf1.length, buf2.length);
+    assert.ok(buf1.every((byte, idx) => byte === buf2[idx]), "addPipePipe must match standard add(||domain) bit for bit");
+    console.log("   ✓ addPipePipe zero-heap-allocation prefix hash verified bit-for-bit identical.");
+
+    // Test 1.5: HTTP 304 Not Modified conditional request handling
+    let receivedConditionalHeaders: any = null;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      receivedConditionalHeaders = init?.headers;
+      // Per RFC 7230 / WHATWG Fetch spec: status 304 must have null body
+      return new Response(null, {
+        status: 304,
+        headers: { "ETag": '"etag-v123"', "Last-Modified": "Wed, 21 Oct 2026 07:28:00 GMT" }
+      });
+    }) as any;
+
+    const res304 = await fetchListContent(mockListUrl, 10000, 5000, () => {
+      assert.fail("Callback should not be invoked on 304 Not Modified");
+    }, { etag: '"etag-v123"' });
+
+    assert.strictEqual(res304.notModified, true, "Should report notModified: true");
+    assert.strictEqual(res304.count, 0, "No domains should be parsed on 304");
+    assert.strictEqual(res304.error, null);
+    assert.strictEqual(receivedConditionalHeaders["If-None-Match"], '"etag-v123"');
+    console.log("   ✓ HTTP 304 Not Modified conditional request verified with 0 parsing overhead.");
 
     // =========================================================================
     // 2. Verify L2 Cache consistency and Bloom rehydration

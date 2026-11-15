@@ -146,8 +146,8 @@ DOMAIN_ROLLUP_MIN_COUNT=2
 PRESET_UPSTREAMS = """
 [
   {
-    "label": "My DoH",
-    "url": "https://zxc.xjr.de5.net/wngnk"
+    "label": "cloudflare-gateway",
+    "url": "https://5adcxgv1mo.cloudflare-gateway.com/dns-query"
   },
   {
     "label": "settings.presetCloudflareSecurity",

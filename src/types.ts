@@ -9,6 +9,8 @@ export interface Env {
   MAX_USERS?: string | number;
   DEFAULT_SESSION_EXPIRATION_MINUTES?: string | number;
   OPTIONAL_SESSION_EXPIRATION_DAYS?: string | number;
+  SESSION_ABSOLUTE_MAX_MINUTES?: string | number;
+  OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS?: string | number;
   ACCESS_TOKEN_EXPIRATION_MINUTES?: string | number;
   SESSION_GEO_DISTANCE_KM?: string | number;
   PREAUTH_TTL_SECONDS?: string | number;
@@ -89,6 +91,25 @@ export interface UserActivityLog {
   extra: string | null;
 }
 
+export interface TtlOverrideRule {
+  enabled: boolean;
+  ttl: number;
+}
+
+export interface TtlOverrideSettings {
+  pass?: TtlOverrideRule;
+  redirect?: TtlOverrideRule;
+  block?: TtlOverrideRule;
+}
+
+export interface PauseFilteringSettings {
+  enabled: boolean;
+  /** Duration in seconds configured for the pause timer (0 = indefinite until manually re-enabled). */
+  duration_seconds: number;
+  /** Unix timestamp in seconds when the pause expires (0 = no automatic expiry). */
+  expires_at: number;
+}
+
 export interface ProfileSettings {
   upstream: string[];
   ecs: {
@@ -107,6 +128,8 @@ export interface ProfileSettings {
     enabled: boolean;
     fronting_domain?: string;
   };
+  ttl_override?: TtlOverrideSettings;
+  pause_filtering?: PauseFilteringSettings;
 }
 
 export interface Profile {

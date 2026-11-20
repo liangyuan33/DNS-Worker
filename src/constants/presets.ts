@@ -23,8 +23,8 @@ export const DEFAULT_PRESET_UPSTREAMS: readonly PresetUpstream[] = [
   { label: 'Cloudflare', url: 'https://cloudflare-dns.com/dns-query' },
   { label: 'settings.presetQuad9', url: 'tls://dns.quad9.net' },
   { label: 'settings.presetQuad9Ecs', url: 'tls://dns11.quad9.net' },
-  { label: 'settings.presetControlDFree', url: 'https://freedns.controld.com/no-ads-malware-typo' },
-  { label: 'settings.presetControlDUncensored', url: 'https://freedns.controld.com/uncensored' },
+  { label: 'settings.presetControlDFree', url: 'tls://no-ads-malware-typo.freedns.controld.com' },
+  { label: 'settings.presetControlDUncensored', url: 'tls://uncensored.freedns.controld.com' },
   { label: 'settings.presetAdGuard', url: 'https://dns.adguard-dns.com/dns-query' },
   { label: 'settings.presetAdGuardFamily', url: 'https://family.adguard-dns.com/dns-query' },
   { label: 'Cloudflare Security (1.1.1.2)', url: 'tcp://1.1.1.2:53' },
@@ -46,12 +46,12 @@ export const DEFAULT_PRESET_EXTERNAL_FILTERS: readonly PresetFilter[] = [
 /**
  * Built-in default substitute domain for resolving DoH IPs.
  */
-export const DEFAULT_SUBSTITUTE_DOMAIN = 'www.okx.com';
+export const DEFAULT_SUBSTITUTE_DOMAIN = 'www.wto.org';
 
 /**
  * Built-in default fail-open upstream address.
  */
-export const DEFAULT_FAIL_OPEN_UPSTREAM = 'https://freedns.controld.com/no-ads-malware-typo';
+export const DEFAULT_FAIL_OPEN_UPSTREAM = 'tls://no-ads-malware-typo.freedns.controld.com';
 
 /**
  * Resolves configured preset upstreams from environment variables or falls back to built-in presets.

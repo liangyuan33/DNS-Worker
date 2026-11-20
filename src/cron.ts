@@ -2,15 +2,19 @@ import { ScheduledEvent } from '@cloudflare/workers-types';
 import { Env, ExecutionContext } from './types';
 import { LogModel } from './models/log';
 import { UserModel } from './models/user';
-import { ProfileModel } from './models/profile';
 import { syncNextGlobalList } from './utils/sync';
 import { syncCloudflareIpRanges } from './utils/ech';
 import { cacheUtils } from './utils/cache';
+import { syncAllAccessKeysSnapshotToDo } from './lib/accessKeyRegistry';
 
 import { SystemSettingsModel } from './models/systemSettings';
 
 /** In-memory throttle tracker for cron cleanup phase across executions in the same isolate */
 let lastCleanupMemoryTs = 0;
+/** In-memory throttle tracker for daily Cloudflare IP sync */
+let lastCfIpsSyncMemoryTs = 0;
+/** In-memory throttle tracker for Durable Object Access Key snapshot sync */
+let lastDoKeysSyncMemoryTs = 0;
 
 /**
  * Handles cron-scheduled events to run background cleanup and list synchronization.
@@ -89,17 +93,18 @@ export async function handleScheduled(
         console.error("[Cron] Inactivity policy execution failed:", e);
       }
 
-      // Domain rollups are not written per micro-batch (high cardinality), so aggregate them here
-      // from completed hours. Runs before log cleanup so logs are rolled up before they expire.
+      // All hourly rollups (action, client, dest, domain, isp) are aggregated once per
+      // completed hour from raw logs, eliminating per-micro-batch rollup write amplification.
+      // Runs before log cleanup so logs are rolled up before they expire.
       try {
         const logModel = new LogModel(env.DB);
         const minDomainCount = Number(env.DOMAIN_ROLLUP_MIN_COUNT) || 1;
-        const insertedDomainRows = await logModel.aggregateDomainRollups(undefined, minDomainCount);
-        if (insertedDomainRows > 0) {
-          console.log(`[Cron] Domain rollups: aggregated ${insertedDomainRows} row(s).`);
+        const aggregatedRows = await logModel.aggregateHourlyRollups(undefined, undefined, minDomainCount);
+        if (aggregatedRows > 0) {
+          console.log(`[Cron] Hourly rollups: aggregated ${aggregatedRows} row(s).`);
         }
       } catch (e) {
-        console.error("[Cron] Domain rollup aggregation failed:", e);
+        console.error("[Cron] Hourly rollup aggregation failed:", e);
       }
 
       try {
@@ -132,12 +137,60 @@ export async function handleScheduled(
       console.log("[Cron] Cleanup phase completed at", new Date().toISOString());
     }
 
-    // ── CLOUDFLARE IPS SYNC ───────────────────────────────────────────────────
-    // Syncs official Cloudflare IP ranges daily from https://www.cloudflare.com/ips-v4 / v6
+    // ── CLOUDFLARE IPS SYNC (Daily Throttled) ─────────────────────────────────
+    // Syncs official Cloudflare IP ranges once per day using L1 + L2 Cache throttling
+    // so minute-level cron isolate rebuilds do not query system_settings every trigger.
     try {
-      await syncCloudflareIpRanges(env.DB);
+      const cfSyncCacheKey = "cron:cf_ips_synced_v1";
+      let shouldSyncCfIps = !lastCfIpsSyncMemoryTs || (now - lastCfIpsSyncMemoryTs >= 86400);
+      if (shouldSyncCfIps && cache) {
+        const cachedCfSync = await cacheUtils.get<number>(cache, cfSyncCacheKey).catch(() => null);
+        if (cachedCfSync && now - cachedCfSync < 86400) {
+          lastCfIpsSyncMemoryTs = cachedCfSync;
+          shouldSyncCfIps = false;
+        }
+      }
+      if (shouldSyncCfIps) {
+        const syncRes = await syncCloudflareIpRanges(env.DB);
+        if (syncRes.success) {
+          lastCfIpsSyncMemoryTs = now;
+          if (cache) {
+            await cacheUtils.set(cache, cfSyncCacheKey, now, 86400).catch(() => {});
+          }
+        }
+      }
     } catch (e) {
       console.error("[Cron] Cloudflare IP range sync failed:", e);
+    }
+
+    // ── ACCESS KEY DURABLE OBJECTS SNAPSHOT SYNC (15m Throttled) ──────────────
+    // Reconciles valid profile keys and access point tokens into Durable Objects so
+    // DoH fail-open lookups remain authenticated even when D1/Turso is offline.
+    if (env.ACCESS_KEY_DO) {
+      try {
+        const doSyncCacheKey = "cron:do_access_keys_synced_v1";
+        const DO_SYNC_INTERVAL_SEC = 900;
+        let shouldSyncDoKeys = !lastDoKeysSyncMemoryTs || (now - lastDoKeysSyncMemoryTs >= DO_SYNC_INTERVAL_SEC);
+        if (shouldSyncDoKeys && cache) {
+          const cachedDoSync = await cacheUtils.get<number>(cache, doSyncCacheKey).catch(() => null);
+          if (cachedDoSync && now - cachedDoSync < DO_SYNC_INTERVAL_SEC) {
+            lastDoKeysSyncMemoryTs = cachedDoSync;
+            shouldSyncDoKeys = false;
+          }
+        }
+        if (shouldSyncDoKeys) {
+          const syncedCount = await syncAllAccessKeysSnapshotToDo(env);
+          lastDoKeysSyncMemoryTs = now;
+          if (cache) {
+            await cacheUtils.set(cache, doSyncCacheKey, now, DO_SYNC_INTERVAL_SEC).catch(() => {});
+          }
+          if (syncedCount > 0) {
+            console.log(`[Cron] Synced ${syncedCount} Access Key(s) to Durable Objects.`);
+          }
+        }
+      } catch (e) {
+        console.error("[Cron] Access Key DO snapshot sync failed:", e);
+      }
     }
 
     // ── SYNC ──────────────────────────────────────────────────────────────────

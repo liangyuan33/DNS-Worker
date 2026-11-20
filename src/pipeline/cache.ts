@@ -2,6 +2,7 @@ import { Env, ProfileSettings, Rule } from "../types";
 import { BloomFilter } from "../utils/bloom";
 import { cacheUtils } from "../utils/cache";
 import { AdGuardProfileEngine, AdGuardPayload } from "../lib/adguard";
+import { detectServerfullMode } from "../router/runtimeConfig";
 
 export interface ConfigCacheEntry {
   settings: ProfileSettings;
@@ -74,21 +75,63 @@ export const DEFAULT_DNS_CACHE_SIZE = 20000;
 export const dnsCache = new SizeCappedMap<string, any>(DEFAULT_DNS_CACHE_SIZE);
 
 /**
- * 动态同步 DNS 缓存容量。支持在 Serverless (Cloudflare Workers) 与 Serverfull (Node.js/Bun) 模式下统一生效。
+ * 动态同步 DNS 缓存容量与运行时缓存上限。支持在 Serverless (Cloudflare Workers) 与 Serverfull (Node.js/Bun) 模式下统一生效。
  *
- * @param env 包含可选 DNS_CACHE_SIZE 配置项的环境变量集合
+ * @param env 包含可选 DNS_CACHE_SIZE / BLOOM_CACHE_SIZE 配置项的环境变量集合
  */
 export function syncDnsCacheSize(env?: Env): void {
   const configured = env?.DNS_CACHE_SIZE ?? (typeof process !== "undefined" ? process.env?.DNS_CACHE_SIZE : undefined);
-  if (configured === undefined || configured === null || configured === "") return;
-  const parsed = typeof configured === "number" ? configured : parseInt(String(configured), 10);
-  if (!isNaN(parsed) && parsed > 0 && parsed !== dnsCache.getMaxEntries()) {
-    dnsCache.setMaxEntries(parsed);
+  if (configured !== undefined && configured !== null && configured !== "") {
+    const parsed = typeof configured === "number" ? configured : parseInt(String(configured), 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed !== dnsCache.getMaxEntries()) {
+      dnsCache.setMaxEntries(parsed);
+    }
+  }
+
+  const isServerfull = env ? detectServerfullMode(env) : false;
+  const configuredBloom = env?.BLOOM_CACHE_SIZE ?? env?.SERVERFULL_BLOOM_CACHE_SIZE;
+  let targetBloomMax = isServerfull ? 32 : 3;
+  if (configuredBloom !== undefined && configuredBloom !== null && configuredBloom !== "") {
+    const parsedBloom = typeof configuredBloom === "number" ? configuredBloom : parseInt(String(configuredBloom), 10);
+    if (!isNaN(parsedBloom) && parsedBloom > 0) {
+      targetBloomMax = parsedBloom;
+    }
+  }
+  if (bloomMemoryMap.getMaxEntries() !== targetBloomMax) {
+    bloomMemoryMap.setMaxEntries(targetBloomMax);
+  }
+
+  const targetConfigMax = isServerfull ? 500 : 200;
+  if (configCache.getMaxEntries() !== targetConfigMax) {
+    configCache.setMaxEntries(targetConfigMax);
   }
 }
 
 // Profile Key 到 Profile 元数据映射缓存 (L1 内存缓存，限制最多 500 个 Key)
 export const profileKeyMemoryMap = new SizeCappedMap<string, { data: any; ts: number }>(500);
+
+type ProfileKeyInvalidatePublisher = (profileKey: string) => void;
+let profileKeyInvalidatePublisher: ProfileKeyInvalidatePublisher | null = null;
+
+/**
+ * Registers an IPC publisher to broadcast profile key cache invalidations across cluster workers.
+ */
+export function registerProfileKeyInvalidatePublisher(
+  publisher: ProfileKeyInvalidatePublisher | null
+): void {
+  profileKeyInvalidatePublisher = publisher;
+}
+
+/**
+ * Evicts a profile key / access point token from local L1 memory and notifies peer cluster workers.
+ */
+export function invalidateProfileKeyCache(profileKey: string, propagate = true): void {
+  if (!profileKey) return;
+  profileKeyMemoryMap.delete(profileKey);
+  if (propagate) {
+    profileKeyInvalidatePublisher?.(profileKey);
+  }
+}
 
 // 默认 Profile 元数据内存缓存 (L1 内存缓存，5 分钟 TTL，防范 UDP DNS 高频穿透)
 export let defaultProfileMemoryCache: { data: any; ts: number } | null = null;

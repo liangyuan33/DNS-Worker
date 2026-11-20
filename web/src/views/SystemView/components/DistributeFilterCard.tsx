@@ -107,31 +107,29 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
         intent: res.failedCount > 0 && res.addedCount === 0 ? Intent.DANGER : (res.failedCount > 0 ? Intent.WARNING : Intent.SUCCESS),
         icon: res.failedCount > 0 && res.addedCount === 0 ? "error" : "tick",
       });
-      if (res.addedCount > 0) {
-        setDistributed((prev) => {
-          const exists = prev.some((item) => item.url === res.url);
-          if (exists) {
-            return prev.map((item) =>
-              item.url === res.url
-                ? {
-                    ...item,
-                    userCount: item.userCount + res.addedCount,
-                    usernames: Array.from(new Set([...item.usernames, ...res.addedUsernames])),
-                  }
-                : item
-            );
-          }
-          return [
-            ...prev,
-            {
-              url: res.url,
-              profileCount: res.affectedProfilesCount,
-              userCount: res.addedCount,
-              usernames: res.addedUsernames,
-            },
-          ].sort((a, b) => a.url.localeCompare(b.url));
-        });
-      }
+      setDistributed((prev) => {
+        const exists = prev.some((item) => item.url === res.url);
+        if (exists) {
+          return prev.map((item) =>
+            item.url === res.url
+              ? {
+                  ...item,
+                  userCount: item.userCount + res.addedCount,
+                  usernames: Array.from(new Set([...item.usernames, ...res.addedUsernames])),
+                }
+              : item
+          );
+        }
+        return [
+          ...prev,
+          {
+            url: res.url,
+            profileCount: res.affectedProfilesCount,
+            userCount: res.addedCount,
+            usernames: res.addedUsernames,
+          },
+        ].sort((a, b) => a.url.localeCompare(b.url));
+      });
       await fetchDistributed();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -379,19 +377,9 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
                 key={item.url}
                 className="p-3 bg-white dark:bg-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm"
               >
-                <div className="min-w-0 flex-1 space-y-1">
+                <div className="min-w-0 flex-1">
                   <div className="font-mono text-xs text-gray-800 dark:text-gray-200 truncate select-all" title={item.url}>
                     {item.url}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                    <Tag minimal round intent={Intent.PRIMARY}>
-                      {t("admin.distributeFilter.usersCount", "{{count}} 位用户", { count: item.userCount })}
-                    </Tag>
-                    {item.usernames.length > 0 && (
-                      <span className="text-xs text-gray-400 truncate max-w-xs">
-                        ({item.usernames.join(", ")})
-                      </span>
-                    )}
                   </div>
                 </div>
 

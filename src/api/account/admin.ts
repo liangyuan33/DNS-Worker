@@ -16,6 +16,7 @@ import {
   getTursoMigrationStats,
   runTursoMigrations
 } from "../../lib/turso";
+import { detectServerfullMode } from "../../router/runtimeConfig";
 
 /**
  * Allowlist of system setting keys that can be updated via administrative REST APIs.
@@ -84,9 +85,14 @@ export async function handleAdminRequest(
       const targetId = pathParts[3];
       if (targetId === user.id) return new Response("Cannot delete yourself", { status: 400 });
       const { invalidateAuthUserCacheByUserId } = await import("../../lib/middleware");
+      const { collectOwnerAccessKeys, deleteAccessKeysInDo } = await import("../../lib/accessKeyRegistry");
       invalidateAuthUserCacheByUserId(targetId);
+      const keysToRevoke = await collectOwnerAccessKeys(env.DB, targetId);
       await profileModel.deleteByOwner(targetId);
       await userModel.delete(targetId);
+      if (keysToRevoke.length > 0) {
+        ctx.waitUntil(deleteAccessKeysInDo(env, keysToRevoke));
+      }
       return new Response(null, { status: 204 });
     }
   }
@@ -137,14 +143,7 @@ export async function handleAdminRequest(
 
   // 数据库管理与迁移接口: /api/admin/database
   if (pathParts[2] === 'database') {
-    const isServerfull = Boolean(
-      env.SERVERFULL_DEFAULT_PROFILE_KEY !== undefined ||
-      env.SERVERFULL_HOST !== undefined ||
-      env.SERVERFULL_DOT_DOMAIN !== undefined ||
-      env.SERVERFULL_HTTP_PORT !== undefined ||
-      env.SERVERFULL_HTTPS_PORT !== undefined ||
-      env.SERVERFULL_DB_PATH !== undefined
-    );
+    const isServerfull = detectServerfullMode(env);
     const dbService = getDatabaseService(env, isServerfull);
     const isTurso = dbService === 'Turso' && isTursoConfigured(env);
 
@@ -168,18 +167,21 @@ export async function handleAdminRequest(
           });
         }
         try {
-          const appliedCount = await runTursoMigrations(env.DB as any);
+          // Cap per-request migrations to stay safely within Cloudflare Workers Free Plan 50-subrequest limit.
+          const appliedCount = await runTursoMigrations(env.DB as any, undefined, { maxMigrations: 15 });
           const stats = await getTursoMigrationStats(env.DB as any);
           return new Response(JSON.stringify({
             success: true,
             appliedCount,
+            hasMore: !stats.completed,
             stats
           }), { headers: { 'Content-Type': 'application/json' } });
         } catch (err: any) {
+          const errMsg = err instanceof Error ? err.message : String(err || '');
           console.error('[Admin Database Migrate] Migration execution failed:', err);
           return new Response(JSON.stringify({
             success: false,
-            error: 'Database migration failed'
+            error: errMsg ? `Database migration failed: ${errMsg}` : 'Database migration failed'
           }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }

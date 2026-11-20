@@ -8,6 +8,7 @@ import { getCurrentUser, validateCsrf } from '../lib/middleware';
 import { isUsableJwtSecret } from '../lib/jwt';
 import { handleAuthRequest } from '../api/auth';
 import { handleProfilesRequest } from '../api/profiles';
+import { handleAccessPointsRequest } from '../api/accessPoints';
 import { handleAccountRequest } from '../api/account';
 import { handleSystemRequest } from '../api/system';
 import { resolveDbConfigStatus, RouterRuntimeContext } from './runtimeConfig';
@@ -52,7 +53,7 @@ export async function handleApiRouter(
   ctx: ExecutionContext,
   runtimeCtx: RouterRuntimeContext
 ): Promise<{ response: Response; currentUser: User | null }> {
-  const { isDbMissing, dbErrorMessage } = await resolveDbConfigStatus(
+  const { isDbMissing, isDbQuotaExceeded, dbErrorCode, dbErrorMessage } = await resolveDbConfigStatus(
     env,
     runtimeCtx.isServerfull,
     runtimeCtx.dbService
@@ -68,6 +69,26 @@ export async function handleApiRouter(
         isJwtSecretMissing,
         databaseService: runtimeCtx.dbService,
         message: dbErrorMessage || 'DNS Worker is not fully configured. Please configure the database and JWT_SECRET secret variable.'
+      }), {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    };
+  }
+
+  if (isDbQuotaExceeded) {
+    return {
+      currentUser: null,
+      response: new Response(JSON.stringify({
+        error: 'database_quota_exceeded',
+        isDbMissing: false,
+        isDbQuotaExceeded: true,
+        dbErrorCode,
+        databaseService: runtimeCtx.dbService,
+        message: dbErrorMessage || 'Database usage quota exceeded. Management API is temporarily paused while DNS fail-open remains active.'
       }), {
         status: 503,
         headers: {
@@ -117,6 +138,10 @@ export async function handleApiRouter(
 
   if (url.pathname.startsWith('/api/profiles')) {
     return { currentUser, response: await handleProfilesRequest(request, env, currentUser, ctx) };
+  }
+
+  if (url.pathname === '/api/access_points' || url.pathname.startsWith('/api/access_points/')) {
+    return { currentUser, response: await handleAccessPointsRequest(request, env, currentUser!, ctx) };
   }
 
   if (url.pathname.startsWith('/api/account') || url.pathname.startsWith('/api/admin')) {

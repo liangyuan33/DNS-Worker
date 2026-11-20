@@ -1,6 +1,7 @@
 import { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import { SystemSettingsModel } from "../systemSettings";
 import { KemKeyModel } from "../kemKey";
+import { prepareBoundedLogDeleteStatement } from "./core";
 
 /**
  * Model responsible for enforcing log retention policies and purging
@@ -110,13 +111,15 @@ export class LogRetentionModel {
 
         // Delete bounded number of rows per profile per hourly cron run if budget remains
         if (canDeleteLogs && effectiveBatchLimit > 0) {
-          logDeleteStatements.push(
-            this.db.prepare(`
-              DELETE FROM logs WHERE (profile_id, timestamp, id) IN (
-                SELECT profile_id, timestamp, id FROM logs WHERE profile_id = ? AND timestamp < ? LIMIT ?
-              )
-            `).bind(profile.id, threshold, perProfileLimit)
+          const deleteStmt = await prepareBoundedLogDeleteStatement(
+            this.db,
+            profile.id,
+            threshold,
+            perProfileLimit
           );
+          if (deleteStmt) {
+            logDeleteStatements.push(deleteStmt);
+          }
         }
       }
 
@@ -128,12 +131,6 @@ export class LogRetentionModel {
           await this.db.batch(chunk);
         }
       }
-
-      // Clean up any orphaned hourly_rollups whose profile no longer exists
-      await this.db
-        .prepare("DELETE FROM hourly_rollups WHERE profile_id NOT IN (SELECT id FROM profiles)")
-        .run()
-        .catch(() => {});
 
       // Execute log deletions in chunks and track affected rows
       let newlyDeletedLogs = 0;
@@ -183,6 +180,36 @@ export class LogRetentionModel {
       }
 
       if (newlyDeletedLogs > 0 || isDailyOrphanCheckDue) {
+        if (isDailyOrphanCheckDue) {
+          // Walk hourly_rollups distinct profile_ids via clustered PK seeks (O(distinct profiles))
+          // instead of `profile_id NOT IN (SELECT id FROM profiles)` which forces a full-table scan.
+          try {
+            const validProfileIds = new Set(profiles.map((p) => p.id));
+            const orphanRollupDeletes: D1PreparedStatement[] = [];
+            let cursor = "";
+            for (let step = 0; step < 200; step++) {
+              const next = await this.db
+                .prepare("SELECT profile_id FROM hourly_rollups WHERE profile_id > ? ORDER BY profile_id ASC LIMIT 1")
+                .bind(cursor)
+                .first<{ profile_id: string } | null>();
+              if (!next?.profile_id) break;
+              cursor = next.profile_id;
+              if (!validProfileIds.has(cursor)) {
+                orphanRollupDeletes.push(
+                  this.db.prepare("DELETE FROM hourly_rollups WHERE profile_id = ?").bind(cursor)
+                );
+              }
+            }
+            if (orphanRollupDeletes.length > 0) {
+              for (let i = 0; i < orphanRollupDeletes.length; i += CHUNK_SIZE) {
+                await this.db.batch(orphanRollupDeletes.slice(i, i + CHUNK_SIZE));
+              }
+            }
+          } catch {
+            // Non-critical orphan rollup cleanup error
+          }
+        }
+
         try {
           const kemKeyModel = new KemKeyModel(this.db);
           const deletedOrphanKeys = await kemKeyModel.cleanupOrphans(86400, 100);

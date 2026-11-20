@@ -1,7 +1,7 @@
 import { Context, Env, ExecutionContext } from '../types';
 import { parseDNSQuery } from '../utils/dns';
 import { pipeline } from '../pipeline';
-import { ProfileModel, ProfileWithBloom } from '../models/profile';
+import { ProfileModel, ProfileWithBloom, ResolvedProfileByKey } from '../models/profile';
 import { UserModel } from '../models/user';
 import { cacheUtils } from '../utils/cache';
 import {
@@ -9,10 +9,13 @@ import {
   defaultProfileMemoryCache,
   setDefaultProfileMemoryCache
 } from '../pipeline/cache';
-import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
+import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
+import { lookupAccessKeyInDo, syncResolvedProfileKeyToDo } from '../lib/accessKeyRegistry';
+import { recordActiveDnsConnection } from '../lib/activeDns';
+import { detectServerfullMode } from '../router/runtimeConfig';
 
-/** In-memory throttle tracker for profile and user last_active database updates */
+/** In-memory throttle tracker for user last DNS resolution database updates */
 const activeThrottleMemoryMap = new Map<string, number>();
 
 /**
@@ -53,9 +56,14 @@ export async function resolveProfileByKey(
   const cache = typeof caches !== "undefined" ? (caches as any).default : null;
   const now = Date.now();
 
-  // 1. Check L1 Memory Cache (Isolate Global) - 5 minutes
+  if (!profileKey) {
+    return null;
+  }
+
+  // 1. Check L1 Memory Cache (Isolate Global) - 5 minutes (30s for emergency fail-open fallback)
   const inMem = profileKeyMemoryMap.get(profileKey);
-  if (inMem && now - inMem.ts < 300_000) {
+  const l1Ttl = inMem?.data?.isEmergencyFallback ? 30_000 : 300_000;
+  if (inMem && now - inMem.ts < l1Ttl) {
     return inMem.data;
   }
 
@@ -73,29 +81,72 @@ export async function resolveProfileByKey(
     }
   }
 
-  // 3. Fallback to D1 (only executed on cache miss)
+  // 3. Fallback to D1/Turso (only executed on cache miss)
   try {
+    if (!env.DB) {
+      throw new Error('Database not configured');
+    }
     const profileModel = new ProfileModel(env.DB);
-    const profile = await profileModel.findByKey(profileKey);
+    const profile: ResolvedProfileByKey | null = await profileModel.findByKey(profileKey);
 
     if (profile) {
+      if (profile.unbound_access_point && env.FAIL_OPEN_UPSTREAM) {
+        profile.settings = JSON.stringify({
+          upstream: [env.FAIL_OPEN_UPSTREAM],
+          default_policy: "ALLOW",
+          log_retention_days: 0,
+          ecs: { enabled: true, use_client_ip: true }
+        });
+      }
       profileKeyMemoryMap.set(profileKey, { data: profile, ts: now });
       if (cache) {
         ctx.waitUntil(cacheUtils.set(cache, cacheKey, profile, 3600));
       }
+      ctx.waitUntil(syncResolvedProfileKeyToDo(env, profileKey, profile));
       return profile;
     }
   } catch (e: any) {
-    console.warn(`[DoH] D1 profile lookup failed for key ${profileKey}:`, e.message || e);
-    // If D1 is exhausted or erroring, attempt to return stale in-memory data if available
-    if (inMem?.data) {
+    console.warn(`[DoH] DB profile lookup failed for key ${profileKey}:`, e.message || e);
+    // If DB is exhausted or erroring, return cached real profile if available
+    if (inMem?.data && !inMem.data.isEmergencyFallback) {
       return inMem.data;
     }
 
-    // Emergency fail-open fallback if D1 has exceeded its read quota or is unavailable:
-    // Generate a temporary fallback profile so DNS resolution doesn't return 404 or 500
     const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
-    console.warn(`[DoH] D1 unavailable. Providing emergency fallback profile for key ${profileKey} -> ${failOpenUpstream}`);
+
+    // Verify Access Key against Durable Objects registry when available
+    const doLookup = await lookupAccessKeyInDo(env, profileKey);
+    if (doLookup) {
+      if (!doLookup.found && doLookup.populated) {
+        console.warn(`[DoH] Rejecting unregistered key ${profileKey} during DB fail-open outage (verified via DO).`);
+        return null;
+      }
+
+      if (doLookup.found && doLookup.record) {
+        const doFallbackProfile = {
+          id: doLookup.record.profileId,
+          name: "Emergency Fallback",
+          access_point_id: doLookup.record.accessPointId ?? undefined,
+          access_point_name: doLookup.record.accessPointName ?? undefined,
+          settings: JSON.stringify({
+            upstream: [failOpenUpstream],
+            default_policy: "ALLOW",
+            log_retention_days: 0,
+            ecs: { enabled: true, use_client_ip: true }
+          }),
+          owner_id: doLookup.record.ownerId,
+          created_at: Math.floor(now / 1000),
+          updated_at: doLookup.record.updatedAt || Math.floor(now / 1000),
+          isEmergencyFallback: true
+        } as any;
+        profileKeyMemoryMap.set(profileKey, { data: doFallbackProfile, ts: now });
+        return doFallbackProfile;
+      }
+    }
+
+    // Emergency fail-open fallback when DO is unbound (e.g. Serverfull / unit tests) or unseeded:
+    // Generate a temporary fallback profile so DNS resolution doesn't return 404 or 500
+    console.warn(`[DoH] DB unavailable. Providing emergency fallback profile for key ${profileKey} -> ${failOpenUpstream}`);
     return {
       id: profileKey,
       name: "Emergency Fallback",
@@ -107,7 +158,8 @@ export async function resolveProfileByKey(
       }),
       owner_id: "system",
       created_at: Math.floor(now / 1000),
-      updated_at: Math.floor(now / 1000)
+      updated_at: Math.floor(now / 1000),
+      isEmergencyFallback: true
     } as any;
   }
 
@@ -172,7 +224,8 @@ export async function handleDoHRequest(
 ): Promise<Response> {
   // RFC 8484 §5.2: Minimum HTTP version restriction for DoH
   // "The DNS-over-HTTPS protocol MUST be implemented using HTTP/2 or later. Clients and servers MUST NOT negotiate HTTP/1.1 for DoH."
-  const httpProto = (request.cf?.httpProtocol as string | undefined) || request.headers.get('X-Http-Version');
+  const rawHttpProto = (request.cf?.httpProtocol as string | undefined) || request.headers.get('X-Http-Version');
+  const httpProto = rawHttpProto?.trim().toUpperCase();
   if (httpProto && (httpProto === 'HTTP/1.0' || httpProto === 'HTTP/1.1' || httpProto === '1.0' || httpProto === '1.1')) {
     return new Response(
       'This server implements RFC 8484 - DNS Queries over HTTP, and requires HTTP/2 or later in accordance with section 5.2 of the RFC.\n',
@@ -184,7 +237,7 @@ export async function handleDoHRequest(
     );
   }
 
-  const cache = (caches as any).default;
+  const cache = typeof caches !== "undefined" ? (caches as any).default : null;
   let queryRaw: Uint8Array | null = null;
 
   try {
@@ -205,59 +258,82 @@ export async function handleDoHRequest(
       accessPointName: profile.access_point_name,
       startTime: Date.now(), 
       env, 
-      ctx 
+      ctx,
+      isEmergencyFallback: Boolean(profile.isEmergencyFallback)
     };
     const result = await pipeline.process(request, query, context);
 
     // Async task: record active connections and update active timestamps with throttling
-    ctx.waitUntil((async () => {
-      try {
-        const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
-        
-        // Record active connection (used by Debug API)
-        const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
-        if (cache) {
-          await cacheUtils.set(cache, `active_dns:${clientIp}`, profileId, activeDnsTtl);
-        }
-
-        // Update profile activity timestamp (throttled hourly)
-        const nowSec = Math.floor(Date.now() / 1000);
-        const throttleSec = Number(env.THROTTLE_ACTIVE_SEC) || 3600;
-
-        // 1. Fast L1 in-memory check (0ms, 0 subrequests)
-        const inMemThrottle = activeThrottleMemoryMap.get(profileId);
-        if (inMemThrottle && nowSec - inMemThrottle < throttleSec) {
-          return;
-        }
-
-        // 2. Check L2 Cache API (across isolates in the same datacenter)
-        const lastActiveKey = `active_throttle:${profileId}`;
-        const lastActiveThrottled = cache ? await cacheUtils.get<number>(cache, lastActiveKey) : null;
-        if (lastActiveThrottled && nowSec - lastActiveThrottled < throttleSec) {
-          activeThrottleMemoryMap.set(profileId, lastActiveThrottled);
-          return;
-        }
-
-        // Mark in-memory immediately to prevent concurrent requests in this isolate from issuing duplicate DB updates
-        activeThrottleMemoryMap.set(profileId, nowSec);
-
+    if (!profile.isEmergencyFallback) {
+      ctx.waitUntil((async () => {
         try {
-          const profileModel = new ProfileModel(env.DB);
-          await profileModel.updateLastActive(profileId, nowSec);
+          const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
           
-          const userModel = new UserModel(env.DB, env);
-          await userModel.updateLastActiveByProfile(profileId, nowSec);
-        } catch {
-          /* ignore DB write quota errors */
+          // Record active connection (used by Verify Connection / Connected or Not API)
+          const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
+          await recordActiveDnsConnection(
+            cache,
+            clientIp,
+            profileId,
+            activeDnsTtl,
+            detectServerfullMode(env)
+          );
+
+          // Update user DNS resolution activity timestamp (throttled hourly for last_resolve_at & lifecycle inactivity)
+          const nowSec = Math.floor(Date.now() / 1000);
+          const throttleSec = Number(env.THROTTLE_ACTIVE_SEC) || 3600;
+
+          // 1. Fast L1 in-memory check (0ms, 0 subrequests)
+          const inMemThrottle = activeThrottleMemoryMap.get(profileId);
+          if (inMemThrottle && nowSec - inMemThrottle < throttleSec) {
+            return;
+          }
+
+          // 2. Check L2 Cache API (across isolates in the same datacenter)
+          const lastActiveKey = `active_throttle:${profileId}`;
+          const lastActiveThrottled = cache ? await cacheUtils.get<number>(cache, lastActiveKey) : null;
+          if (lastActiveThrottled && nowSec - lastActiveThrottled < throttleSec) {
+            activeThrottleMemoryMap.set(profileId, lastActiveThrottled);
+            return;
+          }
+
+          // Mark in-memory immediately to prevent concurrent requests in this isolate from issuing duplicate DB updates
+          activeThrottleMemoryMap.set(profileId, nowSec);
+
+          try {
+            const userModel = new UserModel(env.DB, env);
+            await userModel.updateLastActiveByProfile(profileId, nowSec);
+          } catch {
+            /* ignore DB write quota errors */
+          }
+          
+          if (cache) {
+            await cacheUtils.set(cache, lastActiveKey, nowSec, throttleSec);
+          }
+        } catch (e) {
+          console.error(`[Background Task] Error for ${profileId}:`, e);
         }
-        
-        if (cache) {
-          await cacheUtils.set(cache, lastActiveKey, nowSec, throttleSec);
+      })());
+    }
+
+    if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
+      if (!hasAlreadyTriedFailOpen(result, env)) {
+        try {
+          const fallbackRes = await resolveFailOpenFallback(env, queryRaw);
+          if (fallbackRes.answer && fallbackRes.answer.length > 0) {
+            return new Response(fallbackRes.answer as any, {
+              headers: {
+                'Content-Type': 'application/dns-message',
+                'Cache-Control': 'max-age=60'
+              }
+            });
+          }
+        } catch (fallbackErr) {
+          console.error('[DoH Pipeline] Fail-open upstream fallback failed:', fallbackErr);
         }
-      } catch (e) {
-        console.error(`[Background Task] Error for ${profileId}:`, e);
       }
-    })());
+      return new Response('Upstream Resolution Failed', { status: 502 });
+    }
 
     return new Response(result.answer as any, {
       headers: {
@@ -274,8 +350,7 @@ export async function handleDoHRequest(
       const rawBytes = queryRaw || (await extractRawQuery(request));
 
       if (rawBytes && rawBytes.length > 0) {
-        const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
-        const transportRes = await fetchFromUpstream(endpoint, rawBytes);
+        const transportRes = await resolveFailOpenFallback(env, rawBytes);
         return new Response(transportRes.answer as any, {
           headers: {
             "Content-Type": "application/dns-message",

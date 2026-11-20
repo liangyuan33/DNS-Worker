@@ -168,7 +168,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
               <th className="whitespace-nowrap">MFA</th>
               <th className="whitespace-nowrap">ID</th>
               <th className="whitespace-nowrap">{t("account.createdAt")}</th>
-              <th className="whitespace-nowrap">{t("account.lastActive")}</th>
               <th className="whitespace-nowrap">{t("account.lastResolve")}</th>
               <th className="text-right whitespace-nowrap">{t("account.actions")}</th>
             </tr>
@@ -189,7 +188,6 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
                 </td>
                 <td className="whitespace-nowrap"><code className="text-xs">{u.id}</code></td>
                 <td className="text-xs text-gray-500 whitespace-nowrap">{u.created_at ? formatDateTime(new Date(u.created_at * 1000)) : '-'}</td>
-                <td className="text-xs text-gray-500 whitespace-nowrap">{u.last_active_at ? formatDateTime(new Date(u.last_active_at * 1000)) : '-'}</td>
                 <td className="text-xs text-gray-500 whitespace-nowrap">{u.last_resolve_at ? formatDateTime(new Date(u.last_resolve_at * 1000)) : '-'}</td>
                 <td className="text-right whitespace-nowrap">
                   <div className="inline-flex items-center gap-1">
@@ -209,8 +207,16 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
       </Card>
 
       <Dialog isOpen={isDialogOpen} onClose={() => { setIsDialogOpen(false); setShowNewUserPassword(false); }} title={t("account.createNewUser")} icon="user">
-        <div className="p-6 space-y-4">
-          <FormGroup label={t("account.username")}><InputGroup value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder={t("auth.usernamePlaceholder")} /></FormGroup>
+        <form
+          className="p-6 space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!createLoading) {
+              void handleCreateUser();
+            }
+          }}
+        >
+          <FormGroup label={t("account.username")}><InputGroup value={newUsername} onChange={e => setNewUsername(e.target.value)} placeholder={t("auth.usernamePlaceholder")} autoFocus /></FormGroup>
           <FormGroup label={t("account.initialPassword")}>
             <InputGroup
               type={showNewUserPassword ? "text" : "password"}
@@ -219,6 +225,7 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
               placeholder={t("auth.passwordPlaceholder")}
               rightElement={
                 <Button
+                  type="button"
                   minimal={true}
                   icon={showNewUserPassword ? "eye-open" : "eye-off"}
                   onClick={() => setShowNewUserPassword(!showNewUserPassword)}
@@ -231,10 +238,10 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
             <HTMLSelect fill value={newUserRole} onChange={e => setNewUserRole(e.target.value as any)} options={[{ label: t("account.roleUser"), value: "user" }, { label: t("account.roleAdmin"), value: "admin" }]} />
           </FormGroup>
           <div className="flex justify-end gap-2 mt-6">
-            <Button text={t("account.cancel")} onClick={() => setIsDialogOpen(false)} />
-            <Button intent={Intent.PRIMARY} text={t("account.createNow")} loading={createLoading} onClick={handleCreateUser} />
+            <Button type="button" text={t("account.cancel")} onClick={() => setIsDialogOpen(false)} />
+            <Button type="submit" intent={Intent.PRIMARY} text={t("account.createNow")} loading={createLoading} />
           </div>
-        </div>
+        </form>
       </Dialog>
     </>
   );

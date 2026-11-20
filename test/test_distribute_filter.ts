@@ -106,7 +106,7 @@ async function runDistributeFilterTests() {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: RequestInfo | URL) => {
     const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (urlStr.includes("adblock_shared.txt") || urlStr.includes("user_custom.txt")) {
+    if (urlStr.includes("adblock_shared.txt") || urlStr.includes("user_custom.txt") || urlStr.includes("all_users_skip.txt") || urlStr.includes("sys_then_user.txt")) {
       return new Response("||ad-tracker.com^\n||telemetry.org^\n", {
         status: 200,
         headers: { "Content-Type": "text/plain", "ETag": '"v1"' }
@@ -150,16 +150,17 @@ async function runDistributeFilterTests() {
 
   assert.strictEqual(distData.success, true);
   assert.strictEqual(distData.totalUsers, 5, "Total 5 users in system");
-  // Admin, Alice, Charlie, Dave added (4 users); Bob already had it in user_lists (skipped = 1)
-  assert.strictEqual(distData.addedCount, 4, "Should add to 4 users who did not have the filter in user_lists");
-  assert.strictEqual(distData.skippedCount, 1, "Should skip 1 user (Bob) who already had the filter");
+  // Even though Bob already had a user-created copy (is_system = 0), Bob still receives the system copy (is_system = 1)
+  assert.strictEqual(distData.addedCount, 5, "Should distribute system list to all 5 users including Bob who had user-level list");
+  assert.strictEqual(distData.skippedCount, 0, "Should skip 0 users on first system distribution");
   assert.strictEqual(distData.failedCount, 0, "Dave has 0 profiles but was successfully added to user_lists!");
-  assert.deepStrictEqual(distData.skippedUsernames, ["user_bob"]);
+  assert.deepStrictEqual(distData.skippedUsernames, []);
   assert.ok(distData.addedUsernames.includes("user_alice"));
+  assert.ok(distData.addedUsernames.includes("user_bob"));
   assert.ok(distData.addedUsernames.includes("user_charlie"));
   assert.ok(distData.addedUsernames.includes("user_dave"));
   assert.ok(distData.addedUsernames.includes("admin_user"));
-  console.log("   ✓ System distribution completed: 4 users added (including Dave with 0 profiles), 1 existing user skipped.\n");
+  console.log("   ✓ System distribution completed: all 5 users received system copy (even Bob with existing user list).\n");
 
   // 6. Verify User Profile Inherits System List with 'system' Scope
   console.log("6. Verifying system list inheritance on GET /api/profiles/:id/lists...");
@@ -317,6 +318,112 @@ async function runDistributeFilterTests() {
   assert.strictEqual(bobFinalLists[0].url, sharedUrl);
   assert.strictEqual(bobFinalLists[0].scope, "user");
   console.log("   ✓ Revocation verified: system lists removed, profile lists and user-created lists safely preserved.\n");
+
+  // 13. Testing System Filter List distributes to all users even when they have user copies, and persists when re-distributed (all skipped)
+  console.log("13. Testing System Filter List distribution with duplicate user copies & idempotent skip persistence...");
+  const allSkipUrl = "http://93.184.216.34/all_users_skip.txt";
+  for (const u of [adminUser, aliceUser, bobUser, charlieUser, daveUser]) {
+    await listModel.addUserList(u.id, allSkipUrl, false);
+  }
+  const distAllDupReq = new Request("http://localhost/api/admin/distribute-filter", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: allSkipUrl })
+  });
+  const distAllDupRes = await handleAccountRequest(distAllDupReq, env, adminUser, ctx);
+  assert.strictEqual(distAllDupRes.status, 200);
+  const distAllDupData = await distAllDupRes.json() as any;
+  assert.strictEqual(distAllDupData.addedCount, 5, "All 5 users must receive the system copy even with existing user copies");
+  assert.strictEqual(distAllDupData.skippedCount, 0);
+
+  // Re-distribute same URL when all 5 users already have is_system = 1 -> all skipped, still persisted in system_lists
+  const distAllSkipRes = await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: allSkipUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  assert.strictEqual(distAllSkipRes.status, 200);
+  const distAllSkipData = await distAllSkipRes.json() as any;
+  assert.strictEqual(distAllSkipData.addedCount, 0, "All 5 users already have is_system = 1 and should be skipped");
+  assert.strictEqual(distAllSkipData.skippedCount, 5, "Skipped count must equal total users");
+
+  const getDistRes = await handleAccountRequest(new Request("http://localhost/api/admin/distribute-filter", { method: "GET" }), env, adminUser, ctx);
+  assert.strictEqual(getDistRes.status, 200);
+  const distList = await getDistRes.json() as any[];
+  const recordedSystemEntry = distList.find((item) => item.url === allSkipUrl);
+  assert.ok(recordedSystemEntry, "URL must remain persisted in System Filter Lists even when all users are skipped");
+
+  // Revoke it cleanly while keeping every user's own is_system = 0 list intact
+  const revokeSkipRes = await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: allSkipUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  assert.strictEqual(revokeSkipRes.status, 200);
+  const getDistAfterRevoke = await (await handleAccountRequest(new Request("http://localhost/api/admin/distribute-filter", { method: "GET" }), env, adminUser, ctx)).json() as any[];
+  assert.strictEqual(getDistAfterRevoke.some((item) => item.url === allSkipUrl), false, "Revoked entry must be removed from System Filter Lists");
+  const aliceHasOwnCopy = await listModel.getUserListByUrl(allSkipUrl, aliceUser.id, false);
+  assert.ok(aliceHasOwnCopy, "User-level copy must remain intact after system revoke");
+  console.log("   ✓ System Filter List distributed across duplicate user lists, persisted when skipped, and revoked cleanly.\n");
+
+  // 14. Testing User-Level Filter List still writes when System Filter List already exists for the user
+  console.log("14. Testing User-Level Filter List addition when already present as System Filter List...");
+  const sysThenUserUrl = "http://93.184.216.34/sys_then_user.txt";
+  const distSysFirstRes = await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  assert.strictEqual(distSysFirstRes.status, 200);
+
+  const addUserAfterSysRes = await handleAccountRequest(
+    new Request("http://localhost/api/account/user-lists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    aliceUser,
+    ctx
+  );
+  assert.strictEqual(addUserAfterSysRes.status, 201, "Adding to User-Level Filter Lists must succeed even when system list exists");
+
+  const aliceUserListsAfter = await (await handleAccountRequest(new Request("http://localhost/api/account/user-lists", { method: "GET" }), env, aliceUser, ctx)).json() as any[];
+  const sysCopy = aliceUserListsAfter.find((l) => l.url === sysThenUserUrl && l.is_system === 1);
+  const userCopy = aliceUserListsAfter.find((l) => l.url === sysThenUserUrl && l.is_system === 0);
+  assert.ok(sysCopy, "System copy exists in Alice's user_lists");
+  assert.ok(userCopy, "User-created copy written to Alice's user_lists");
+
+  // Revoking system list must leave Alice's user-created copy active
+  await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  const aliceUserListsAfterRevoke = await (await handleAccountRequest(new Request("http://localhost/api/account/user-lists", { method: "GET" }), env, aliceUser, ctx)).json() as any[];
+  assert.strictEqual(aliceUserListsAfterRevoke.some((l) => l.url === sysThenUserUrl && l.is_system === 1), false, "System copy revoked");
+  assert.strictEqual(aliceUserListsAfterRevoke.some((l) => l.url === sysThenUserUrl && l.is_system === 0), true, "User copy preserved after system revoke");
+  console.log("   ✓ User-Level Filter List written alongside System Filter List and preserved across system revoke.\n");
 
   // Cleanup
   globalThis.fetch = originalFetch;

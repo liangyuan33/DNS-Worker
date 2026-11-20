@@ -1,7 +1,9 @@
 import { D1Database, ExecutionContext as CFExecutionContext } from "@cloudflare/workers-types";
+import type { AccessKeyDoNamespace } from "./lib/accessKeyRegistry";
 
 export interface Env {
   DB: D1Database;
+  ACCESS_KEY_DO?: AccessKeyDoNamespace;
   ASSETS: any;
   JWT_SECRET?: string;
   MAX_ACCESS_POINTS_PER_PROFILE?: string | number;
@@ -70,7 +72,6 @@ export interface User {
   totp_skip_password?: number; // 0 | 1 — when 1, login skips password check
   passkeys_count?: number;
   created_at?: number;
-  last_active_at?: number;
   last_resolve_at?: number;
   timezone?: string | null;
   locale?: string | null;
@@ -142,6 +143,8 @@ export interface Profile {
   updated_at: number;
   list_bloom?: string;
   list_updated_at?: number;
+  /** True when synthesized by fail-open recovery after a DB lookup failure. */
+  isEmergencyFallback?: boolean;
 }
 
 export interface Rule {
@@ -282,11 +285,14 @@ export interface Context {
   startTime: number;
   env: Env;
   ctx: ExecutionContext;
+  /** True when profile lookup fell back to emergency fail-open mode due to DB unavailability. */
+  isEmergencyFallback?: boolean;
 }
 
 export interface AccessPoint {
   id: string;
-  profile_id: string;
+  owner_id?: string;
+  profile_id: string | null;
   name: string;
   token: string;
   created_at: number;

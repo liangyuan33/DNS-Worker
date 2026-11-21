@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Divider, Tag, Intent, type OverlayToaster } from "@blueprintjs/core";
-import { ShieldCheck } from "lucide-react";
+import { Divider, Intent, type OverlayToaster } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 
@@ -19,9 +18,11 @@ import { ChangePasswordCard } from "./components/ChangePasswordCard";
 import { SessionLockCard } from "./components/SessionLockCard";
 import { UserFilterListsCard } from "./components/UserFilterListsCard";
 import { E2eeCard } from "./components/E2eeCard";
-import { USERNAME_REGEX } from "../../utils/auth";
+import { USERNAME_REGEX, formatApiErrorMessage } from "../../utils/auth";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
+import { UserRoleBadge } from "../../components/UserRoleBadge";
 
 export interface AccountViewProps {
   onSavingChange?: (saving: boolean) => void;
@@ -41,6 +42,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
   const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
   const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
+  const headerTitleRef = useStickyHeaderTitle<HTMLHeadingElement>(t("account.title"));
 
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [editUsername, setEditUsername] = useState("");
@@ -70,11 +72,12 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
   }, [i18n]);
 
   const handleUpdateUsername = async () => {
-    if (editUsername === me?.username) {
+    const trimmed = editUsername.trim();
+    if (trimmed === me?.username) {
       setIsEditingUsername(false);
       return;
     }
-    if (!USERNAME_REGEX.test(editUsername)) {
+    if (!USERNAME_REGEX.test(trimmed)) {
       toasterRef?.current?.show({
         message: t("account.formatTipUsername"),
         intent: Intent.WARNING,
@@ -83,12 +86,13 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
       return;
     }
     const previousUsername = me?.username || "";
-    const targetUsername = editUsername;
+    const targetUsername = trimmed;
     setUsernameLoading(true);
     onSavingChange?.(true);
     try {
       await executeWithTimeout(updateMe({ username: targetUsername }), 10000);
       setMe((prev) => (prev ? { ...prev, username: targetUsername } : null));
+      setEditUsername(targetUsername);
       setIsEditingUsername(false);
       toasterRef?.current?.show({
         message: t("common.saveSuccess", "保存成功"),
@@ -102,7 +106,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
       setMe((prev) => (prev ? { ...prev, username: previousUsername } : null));
       setIsEditingUsername(false);
       toasterRef?.current?.show({
-        message: e.message || t("common.saveFailed", "保存失败"),
+        message: e?.message ? formatApiErrorMessage(e, t) : t("common.saveFailed", "保存失败"),
         intent: Intent.DANGER,
         icon: "error",
       });
@@ -152,19 +156,13 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
     <div className={clsx(PAGE_CONTAINER_STANDARD, "mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
       <div className="flex justify-between items-start sm:items-end gap-3 flex-wrap sm:flex-nowrap">
         <div>
-          <h2 className="bp6-heading">{t("account.title")}</h2>
+          <h2 ref={headerTitleRef} className="bp6-heading">{t("account.title")}</h2>
           <p className="bp6-text-muted">{t("account.subtitle")}</p>
         </div>
         {me && (
-          <Tag
-            large
-            round
-            intent={me.role === "admin" ? Intent.DANGER : Intent.PRIMARY}
-            icon={<ShieldCheck size={16} />}
-            className="shrink-0 whitespace-nowrap"
-          >
-            {me.role === "admin" ? t("account.roleAdmin") : t("account.roleUser")}
-          </Tag>
+          <div className="flex items-center justify-end w-full sm:w-auto shrink-0">
+            <UserRoleBadge role={me.role} />
+          </div>
         )}
       </div>
 
@@ -181,6 +179,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
           setUsernameFocused={setUsernameFocused}
           onUpdateUsername={handleUpdateUsername}
           onUpdateTimezone={handleUpdateTimezone}
+          toasterRef={toasterRef}
         />
 
         <ChangePasswordCard me={me} onRefresh={fetchMe} />
